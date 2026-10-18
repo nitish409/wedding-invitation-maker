@@ -96,8 +96,7 @@ cp .env.example .env.local
 ```bash
 npm run dev
 ```
-- **Live Deployed Site**: **[https://wedding-invitation-maker-omega.vercel.app/](https://wedding-invitation-maker-omega.vercel.app/)**
-- **Local Development**: Open **[http://localhost:3000](http://localhost:3000)** in your browser:
+- Open **[https://wedding-invitation-maker-yha4.vercel.app/]((https://wedding-invitation-maker-yha4.vercel.app/))** in your browser:
   - **Homepage & Live Template Showcase**: `http://localhost:3000`
   - **4-Step Creation Wizard**: `http://localhost:3000/create?template=royal-wedding`
   - **Protected Admin Dashboard**: `http://localhost:3000/admin` *(Default local passcode: `shubhvivah-admin-2026`)*
