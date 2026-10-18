@@ -168,49 +168,6 @@ function CreateInvitationWizardInner() {
     }));
   };
 
-  const loadReferenceVideoDemoData = () => {
-    setProject((prev) => ({
-      ...prev,
-      language: 'mixed',
-      brideName: 'Sagrika',
-      groomName: 'Shyam',
-      brideParents: 'Smt. & Shri Sharma Family',
-      groomParents: 'Smt. & Shri Aggarwal Family',
-      familyMessage:
-        'Together with their families, Sagrika & Shyam invite you to celebrate the beginning of their FOREVER.',
-      hashtag: '#SagrikaWedsShyam',
-      weddingDate: '2026-11-21',
-      weddingTime: '07:00 PM Onwards',
-      weddingVenue: 'Aggarwal Marriage Lawn',
-      weddingAddress: 'Chhata Road Shergarh, Near Patel Chowk, Mathura U.P.',
-      rsvpDetails: 'RSVP: Both Families • Mathura & Vrindavan',
-      events: [
-        {
-          id: 'evt-haldi-ref',
-          type: 'haldi',
-          name: 'Haldi Ceremony',
-          enabled: true,
-          date: '2026-11-20',
-          time: '12:00 PM',
-          venue: 'Radha Damodar Dham',
-          address: 'Vrindavan, Mathura, Uttar Pradesh',
-          customMessage: 'Dulha dulhan ko hai jaldi... Aao lagaye haldi',
-        },
-        {
-          id: 'evt-mehndi-ref',
-          type: 'mehndi',
-          name: 'Mehndi & Sangeet',
-          enabled: true,
-          date: '2026-11-20',
-          time: '05:00 PM',
-          venue: 'Radha Damodar Dham',
-          address: 'Vrindavan, Mathura, Uttar Pradesh',
-          customMessage: 'Music, Henna & Celebrations',
-        },
-      ],
-    }));
-  };
-
   // Ceremony Event Handlers
   const updateEvent = (id: string, patch: Partial<CeremonyEvent>) => {
     setProject((prev) => ({
@@ -465,14 +422,6 @@ function CreateInvitationWizardInner() {
 
                   {/* Quick Demo Data Presets */}
                   <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={loadReferenceVideoDemoData}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-[#5C0A1B] border border-[#D4AF37]/50 text-xs font-semibold transition"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
-                      Sagrika &amp; Shyam Demo
-                    </button>
                     <button
                       type="button"
                       onClick={loadEnglishDemoData}

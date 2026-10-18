@@ -26,29 +26,9 @@ export interface WeddingVideoProps {
   customTemplates?: TemplateDefinition[];
 }
 
-function parseDateParts(dateStr: string) {
-  const d = new Date(dateStr || '2026-11-21');
-  if (isNaN(d.getTime())) {
-    return {
-      weekday: 'Saturday',
-      day: '21',
-      monthUpper: 'NOVEMBER',
-      monthShort: 'NOV',
-      year: '2026',
-    };
-  }
-  return {
-    weekday: d.toLocaleDateString('en-US', { weekday: 'long' }),
-    day: String(d.getDate()),
-    monthUpper: d.toLocaleDateString('en-US', { month: 'long' }).toUpperCase(),
-    monthShort: d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase(),
-    year: String(d.getFullYear()),
-  };
-}
-
 function FramedPhoto({
   slot,
-  size = 400,
+  size = 420,
   borderColor = '#D4AF37',
   accentColor = '#F3E5AB',
   arch = false,
@@ -68,10 +48,10 @@ function FramedPhoto({
     <div
       style={{
         width: size,
-        height: arch ? size * 1.15 : size,
+        height: arch ? size * 1.18 : size,
         borderRadius: arch ? `${size / 2}px ${size / 2}px 28px 28px` : '50%',
         border: `8px solid ${borderColor}`,
-        boxShadow: `0 0 0 6px rgba(212,175,55,0.28), 0 20px 45px rgba(0,0,0,0.45)`,
+        boxShadow: `0 0 0 6px rgba(212,175,55,0.28), 0 24px 50px rgba(0,0,0,0.45)`,
         overflow: 'hidden',
         position: 'relative',
         background: removeBg
@@ -90,9 +70,7 @@ function FramedPhoto({
           objectFit: 'cover',
           transform: `scale(${zoom}) translate(${offsetX * 0.5}%, ${offsetY * 0.5}%)`,
           transformOrigin: 'center center',
-          filter: removeBg
-            ? 'contrast(1.08) saturate(1.1) drop-shadow(0 8px 20px rgba(0,0,0,0.4))'
-            : 'none',
+          filter: removeBg ? 'contrast(1.08) saturate(1.1) drop-shadow(0 8px 20px rgba(0,0,0,0.4))' : 'none',
           maskImage: removeBg
             ? 'radial-gradient(circle at center, black 58%, transparent 92%)'
             : undefined,
@@ -115,7 +93,7 @@ function FramedPhoto({
   );
 }
 
-function GaneshMotifSVG({ color, size = 210 }: { color: string; size?: number }) {
+function GaneshMotifSVG({ color, size = 230 }: { color: string; size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 200 200" fill="none">
       <circle
@@ -128,14 +106,16 @@ function GaneshMotifSVG({ color, size = 210 }: { color: string; size?: number })
         opacity="0.7"
       />
       <circle cx="100" cy="100" r="76" stroke={color} strokeWidth="2" opacity="0.5" />
+      {/* Crown (Mukut) */}
       <path
-        d="M70 68 L100 24 L130 68 Z"
+        d="M70 68 L100 26 L130 68 Z"
         stroke={color}
         strokeWidth="4"
         fill={color}
         fillOpacity="0.2"
       />
-      <circle cx="100" cy="20" r="6" fill={color} />
+      <circle cx="100" cy="22" r="6" fill={color} />
+      {/* Ears */}
       <path
         d="M68 78 C36 70, 34 118, 68 114"
         stroke={color}
@@ -148,143 +128,17 @@ function GaneshMotifSVG({ color, size = 210 }: { color: string; size?: number })
         strokeWidth="4.5"
         strokeLinecap="round"
       />
+      {/* Head & Trunk (Vakratunda) */}
       <path
         d="M74 72 C74 55, 126 55, 126 72 C126 95, 112 108, 104 126 C98 140, 115 152, 124 140"
         stroke={color}
-        strokeWidth="5.5"
+        strokeWidth="5"
         strokeLinecap="round"
       />
+      {/* Tilak */}
       <line x1="88" y1="76" x2="112" y2="76" stroke={color} strokeWidth="3" />
       <line x1="92" y1="83" x2="108" y2="83" stroke={color} strokeWidth="3" />
       <circle cx="100" cy="91" r="4" fill={color} />
-    </svg>
-  );
-}
-
-/**
- * Peacock SVG Motif (Perched left or right)
- */
-function PeacockMotif({ flip = false }: { flip?: boolean }) {
-  return (
-    <svg
-      width="150"
-      height="190"
-      viewBox="0 0 150 190"
-      style={{ transform: flip ? 'scaleX(-1)' : undefined }}
-    >
-      {/* Tail feathers */}
-      <path
-        d="M65 85 C30 105, 12 145, 8 182 C38 175, 68 142, 78 95 Z"
-        fill="#047857"
-      />
-      <circle cx="28" cy="155" r="8" fill="#D4AF37" />
-      <circle cx="28" cy="155" r="4" fill="#1D4ED8" />
-      <circle cx="45" cy="135" r="7" fill="#D4AF37" />
-      <circle cx="45" cy="135" r="3.5" fill="#1D4ED8" />
-      <circle cx="38" cy="166" r="6" fill="#D4AF37" />
-      <circle cx="38" cy="166" r="3" fill="#1D4ED8" />
-      {/* Body & Neck */}
-      <ellipse cx="82" cy="78" rx="22" ry="28" fill="#1E40AF" />
-      <path
-        d="M84 55 C82 32, 96 20, 104 28 C108 33, 98 48, 95 66"
-        fill="#1D4ED8"
-      />
-      {/* Beak & Crest */}
-      <polygon points="104,26 116,30 104,34" fill="#F59E0B" />
-      <line x1="96" y1="22" x2="92" y2="12" stroke="#D4AF37" strokeWidth="2.5" />
-      <circle cx="92" cy="11" r="3" fill="#D4AF37" />
-      <line x1="100" y1="22" x2="100" y2="11" stroke="#D4AF37" strokeWidth="2.5" />
-      <circle cx="100" cy="10" r="3" fill="#D4AF37" />
-    </svg>
-  );
-}
-
-/**
- * Swinging Brass Temple Bell (Ghanti) on Marigold Garland
- */
-function TempleBell({
-  height = 140,
-  swingDeg = 0,
-}: {
-  height?: number;
-  swingDeg?: number;
-}) {
-  const pompoms = Math.max(2, Math.floor((height - 55) / 28));
-  return (
-    <div
-      style={{
-        transform: `rotate(${swingDeg}deg)`,
-        transformOrigin: 'top center',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-      }}
-    >
-      {Array.from({ length: pompoms }).map((_, idx) => (
-        <div
-          key={idx}
-          style={{
-            width: 24,
-            height: 22,
-            borderRadius: '50%',
-            background: idx % 2 === 0 ? '#FACC15' : '#F59E0B',
-            boxShadow: 'inset 0 -3px 6px rgba(180,83,9,0.45)',
-            marginBottom: 3,
-          }}
-        />
-      ))}
-      <svg width="56" height="54" viewBox="0 0 56 54">
-        <rect x="24" y="0" width="8" height="10" rx="3" fill="#B45309" />
-        <path
-          d="M14 16 C14 8, 42 8, 42 16 L49 42 C50 45, 6 45, 7 42 Z"
-          fill="url(#bellGold)"
-          stroke="#92400E"
-          strokeWidth="2"
-        />
-        <circle cx="28" cy="46" r="5" fill="#B45309" />
-        <defs>
-          <linearGradient id="bellGold" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#B45309" />
-            <stop offset="50%" stopColor="#FDE047" />
-            <stop offset="100%" stopColor="#92400E" />
-          </linearGradient>
-        </defs>
-      </svg>
-    </div>
-  );
-}
-
-/**
- * Yellow Folded Paper Fan Wheel (Haldi Pinwheel Decoration)
- */
-function HaldiPaperWheel({
-  size = 180,
-  rotation = 0,
-}: {
-  size?: number;
-  rotation?: number;
-}) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 200 200"
-      style={{ transform: `rotate(${rotation}deg)` }}
-    >
-      <circle cx="100" cy="100" r="95" fill="#FDE047" stroke="#F59E0B" strokeWidth="3" />
-      {Array.from({ length: 24 }).map((_, i) => {
-        const ang = (i * 360) / 24;
-        return (
-          <g key={i} transform={`rotate(${ang} 100 100)`}>
-            <polygon
-              points="100,100 92,6 108,6"
-              fill={i % 2 === 0 ? '#F59E0B' : '#FEF08A'}
-            />
-          </g>
-        );
-      })}
-      <circle cx="100" cy="100" r="18" fill="#D97706" />
-      <circle cx="100" cy="100" r="8" fill="#FEF9C3" />
     </svg>
   );
 }
@@ -308,6 +162,7 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
 
   const copy = useMemo(() => getLocalizedCopy(project.language), [project.language]);
 
+  // Find active scene
   const activeScene =
     scenes.find(
       (s) => frame >= s.startFrame && frame < s.startFrame + s.durationFrames
@@ -316,6 +171,7 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
   const sceneFrame = Math.max(0, frame - activeScene.startFrame);
   const sceneDuration = activeScene.durationFrames;
 
+  // Smooth fade-in and fade-out for each scene
   const sceneOpacity = interpolate(
     sceneFrame,
     [0, 14, sceneDuration - 14, sceneDuration],
@@ -329,9 +185,10 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
     config: { damping: 16, stiffness: 90, mass: 0.9 },
   });
 
-  const translateY = interpolate(entranceSpring, [0, 1], [44, 0]);
-  const scaleIn = interpolate(entranceSpring, [0, 1], [0.93, 1]);
+  const translateY = interpolate(entranceSpring, [0, 1], [48, 0]);
+  const scaleIn = interpolate(entranceSpring, [0, 1], [0.92, 1]);
 
+  // Audio volume with fade-in (2s) and fade-out (2.5s)
   const baseVolume = project.music?.volume ?? 0.85;
   const audioEnvelope = interpolate(
     frame,
@@ -342,19 +199,11 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
 
   const startFromFrames = Math.round((project.music?.startOffsetSec || 0) * fps);
 
-  const isHaldiLook =
-    template.motifStyle === 'marigold' ||
-    (activeScene.kind === 'ceremony' && activeScene.ceremony?.type === 'haldi');
-
-  const isFloralSwingLook = template.motifStyle === 'floral-arch';
-
   return (
     <AbsoluteFill
       style={{
-        background: isHaldiLook
-          ? 'radial-gradient(circle at 50% 30%, #FFFDF7 0%, #FEF3C7 100%)'
-          : `radial-gradient(circle at 50% 32%, ${template.bgColor} 0%, ${template.bgGradientEnd} 100%)`,
-        color: isHaldiLook ? '#5C1916' : template.textColor,
+        background: `radial-gradient(circle at 50% 32%, ${template.bgColor} 0%, ${template.bgGradientEnd} 100%)`,
+        color: template.textColor,
         fontFamily: '"Cormorant Garamond", "Noto Serif Devanagari", serif',
         overflow: 'hidden',
       }}
@@ -369,18 +218,18 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
         />
       )}
 
-      {/* Rotating Sacred Background Mandala / Halo */}
+      {/* Rotating Background Mandala */}
       <div
         style={{
           position: 'absolute',
-          top: '44%',
+          top: '50%',
           left: '50%',
-          width: 960,
-          height: 960,
-          marginLeft: -480,
-          marginTop: -480,
+          width: 980,
+          height: 980,
+          marginLeft: -490,
+          marginTop: -490,
           transform: `rotate(${frame * 0.25}deg)`,
-          opacity: isHaldiLook ? 0.12 : 0.15,
+          opacity: 0.14,
           pointerEvents: 'none',
         }}
       >
@@ -389,7 +238,7 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
             cx="200"
             cy="200"
             r="190"
-            stroke={isHaldiLook ? '#D97706' : template.secondaryColor}
+            stroke={template.secondaryColor}
             strokeWidth="2"
             fill="none"
             strokeDasharray="8 8"
@@ -397,9 +246,17 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
           <circle
             cx="200"
             cy="200"
-            r="150"
-            stroke={isHaldiLook ? '#D97706' : template.secondaryColor}
+            r="155"
+            stroke={template.secondaryColor}
             strokeWidth="1.5"
+            fill="none"
+          />
+          <circle
+            cx="200"
+            cy="200"
+            r="115"
+            stroke={template.secondaryColor}
+            strokeWidth="2"
             fill="none"
           />
           {Array.from({ length: 16 }).map((_, idx) => {
@@ -411,7 +268,7 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
                   cy="65"
                   rx="18"
                   ry="48"
-                  stroke={isHaldiLook ? '#D97706' : template.secondaryColor}
+                  stroke={template.secondaryColor}
                   strokeWidth="1.5"
                   fill="none"
                 />
@@ -421,149 +278,72 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
         </svg>
       </div>
 
-      {/* TOP DECORATIONS INSPIRED BY REFERENCE VIDEO */}
-      {isHaldiLook ? (
-        /* Haldi Pinwheels & Marigold Garlands (Inspired by Reference Screenshot 2) */
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            pointerEvents: 'none',
-          }}
-        >
-          <div style={{ position: 'absolute', top: -70, left: -50 }}>
-            <HaldiPaperWheel size={220} rotation={frame * 0.4} />
-          </div>
-          <div style={{ position: 'absolute', top: -95, left: 210 }}>
-            <HaldiPaperWheel size={320} rotation={-frame * 0.3} />
-          </div>
-          <div style={{ position: 'absolute', top: -60, right: -50 }}>
-            <HaldiPaperWheel size={210} rotation={frame * 0.35} />
-          </div>
-          <div style={{ position: 'absolute', top: 560, right: -85 }}>
-            <HaldiPaperWheel size={230} rotation={-frame * 0.4} />
-          </div>
-
-          {/* Hanging Marigold Strings */}
-          {[95, 165, 760, 845, 935].map((xPos, idx) => (
+      {/* Template Specific Top Header Motifs (Marigolds / Lanterns / Temple Bells) */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 38,
+          left: 60,
+          right: 60,
+          height: 110,
+          display: 'flex',
+          justifyContent: 'space-between',
+          pointerEvents: 'none',
+        }}
+      >
+        {Array.from({ length: 7 }).map((_, i) => {
+          const swing = Math.sin(frame * 0.08 + i) * 6;
+          return (
             <div
-              key={idx}
+              key={i}
               style={{
-                position: 'absolute',
-                top: 10,
-                left: xPos,
-                transform: `rotate(${Math.sin(frame * 0.07 + idx) * 4}deg)`,
+                transform: `rotate(${swing}deg)`,
                 transformOrigin: 'top center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
               }}
             >
-              {Array.from({ length: 4 + (idx % 3) }).map((__, pIdx) => (
-                <div
-                  key={pIdx}
-                  style={{
-                    width: 30,
-                    height: 28,
-                    borderRadius: '50%',
-                    background: pIdx % 2 === 0 ? '#FACC15' : '#F59E0B',
-                    marginBottom: 6,
-                    boxShadow: '0 4px 10px rgba(217,119,6,0.25)',
-                  }}
-                />
-              ))}
+              <div
+                style={{
+                  width: 3,
+                  height: 36 + (i % 2) * 22,
+                  background: template.secondaryColor,
+                }}
+              />
+              <div
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius:
+                    template.motifStyle === 'peacock-mandap'
+                      ? '4px 4px 14px 14px'
+                      : '50%',
+                  background:
+                    template.motifStyle === 'marigold'
+                      ? i % 2 === 0
+                        ? '#F59E0B'
+                        : '#EA580C'
+                      : template.secondaryColor,
+                  boxShadow: `0 0 18px ${template.secondaryColor}`,
+                }}
+              />
             </div>
-          ))}
-        </div>
-      ) : (
-        /* Ornate Palace Arch + Hanging Brass Temple Bells (Inspired by Reference Screenshot 3) */
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 360,
-            pointerEvents: 'none',
-          }}
-        >
-          <svg width="1080" height="320" viewBox="0 0 1080 320" fill="none">
-            <path
-              d="M0 0 L1080 0 L1080 280 C980 220, 920 120, 800 95 C670 68, 600 32, 540 16 C480 32, 410 68, 280 95 C160 120, 100 220, 0 280 Z"
-              fill={template.secondaryColor}
-              fillOpacity="0.18"
-            />
-            <path
-              d="M24 270 C120 200, 180 110, 300 88 C420 64, 485 34, 540 18 C595 34, 660 64, 780 88 C900 110, 960 200, 1056 270"
-              stroke={template.secondaryColor}
-              strokeWidth="6"
-              fill="none"
-            />
-          </svg>
-          {/* Three Center Swinging Brass Temple Bells + Two Side Bells */}
-          <div style={{ position: 'absolute', top: 38, left: 400 }}>
-            <TempleBell height={155} swingDeg={Math.sin(frame * 0.08) * 6} />
-          </div>
-          <div style={{ position: 'absolute', top: 24, left: 512 }}>
-            <TempleBell height={190} swingDeg={Math.sin(frame * 0.08 + 1.2) * 7} />
-          </div>
-          <div style={{ position: 'absolute', top: 38, left: 624 }}>
-            <TempleBell height={155} swingDeg={Math.sin(frame * 0.08 + 2.4) * 6} />
-          </div>
-          <div style={{ position: 'absolute', top: 165, left: 56 }}>
-            <TempleBell height={210} swingDeg={Math.sin(frame * 0.07 + 0.5) * 5} />
-          </div>
-          <div style={{ position: 'absolute', top: 165, right: 56 }}>
-            <TempleBell height={210} swingDeg={Math.sin(frame * 0.07 + 1.8) * 5} />
-          </div>
-        </div>
-      )}
-
-      {/* VINTAGE HERITAGE STREET LAMPS (Inspired by Reference Screenshot 1) */}
-      {isFloralSwingLook && (
-        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-          {/* Left Street Lamp */}
-          <svg
-            width="160"
-            height="1350"
-            viewBox="0 0 160 1350"
-            style={{ position: 'absolute', left: 18, bottom: 180 }}
-          >
-            <polygon
-              points="30,190 130,190 148,105 12,105"
-              fill="#FFFBEB"
-              stroke="#3E2723"
-              strokeWidth="7"
-            />
-            <polygon points="8,105 152,105 80,45" fill="#3E2723" />
-            <rect x="66" y="190" width="28" height="980" fill="#3E2723" />
-            <rect x="44" y="1140" width="72" height="190" rx="8" fill="#2D1B17" />
-          </svg>
-          {/* Right Street Lamp */}
-          <svg
-            width="160"
-            height="1350"
-            viewBox="0 0 160 1350"
-            style={{ position: 'absolute', right: 18, bottom: 180 }}
-          >
-            <polygon
-              points="30,190 130,190 148,105 12,105"
-              fill="#FFFBEB"
-              stroke="#3E2723"
-              strokeWidth="7"
-            />
-            <polygon points="8,105 152,105 80,45" fill="#3E2723" />
-            <rect x="66" y="190" width="28" height="980" fill="#3E2723" />
-            <rect x="44" y="1140" width="72" height="190" rx="8" fill="#2D1B17" />
-          </svg>
-        </div>
-      )}
+          );
+        })}
+      </div>
 
       {/* Falling Petals / Golden Dust Particles */}
       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-        {Array.from({ length: 24 }).map((_, i) => {
+        {Array.from({ length: 22 }).map((_, i) => {
           const seed = (i + 1) * 47;
           const x = ((seed * 43) % 960) + 60;
-          const speed = 2.4 + (i % 4) * 0.9;
+          const speed = 2.2 + (i % 4) * 0.9;
           const y = ((frame * speed + seed * 19) % 1980) - 40;
           const drift = Math.sin(frame * 0.04 + i) * 24;
+          const isPetal =
+            template.motifStyle === 'marigold' ||
+            template.motifStyle === 'floral-arch';
           return (
             <div
               key={i}
@@ -571,18 +351,18 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
                 position: 'absolute',
                 left: x + drift,
                 top: y,
-                width: isHaldiLook || isFloralSwingLook ? 16 : 10,
-                height: isHaldiLook || isFloralSwingLook ? 22 : 10,
-                borderRadius:
-                  isHaldiLook || isFloralSwingLook ? '60% 40% 60% 40%' : '50%',
-                background: isHaldiLook
-                  ? i % 2 === 0
-                    ? '#F59E0B'
-                    : '#FACC15'
-                  : isFloralSwingLook
-                  ? '#F472B6'
-                  : template.secondaryColor,
-                opacity: 0.58,
+                width: isPetal ? 16 : 9,
+                height: isPetal ? 22 : 9,
+                borderRadius: isPetal ? '60% 40% 60% 40%' : '50%',
+                background:
+                  template.motifStyle === 'marigold'
+                    ? i % 2 === 0
+                      ? '#F59E0B'
+                      : '#FACC15'
+                    : template.motifStyle === 'floral-arch'
+                    ? '#F472B6'
+                    : template.secondaryColor,
+                opacity: 0.55,
                 transform: `rotate(${frame * 2 + i * 30}deg)`,
               }}
             />
@@ -594,12 +374,10 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
       <div
         style={{
           position: 'absolute',
-          inset: 30,
-          border: `4px solid ${isHaldiLook ? '#D97706' : template.secondaryColor}`,
+          inset: 36,
+          border: `4px solid ${template.secondaryColor}`,
           borderRadius: 28,
-          boxShadow: `inset 0 0 0 10px transparent, inset 0 0 0 12px ${
-            isHaldiLook ? '#D9770666' : `${template.secondaryColor}66`
-          }`,
+          boxShadow: `inset 0 0 0 10px transparent, inset 0 0 0 12px ${template.secondaryColor}66`,
           pointerEvents: 'none',
         }}
       />
@@ -607,7 +385,7 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
       {/* Scene Content Container */}
       <AbsoluteFill
         style={{
-          padding: '150px 84px 110px 84px',
+          padding: '150px 84px 120px 84px',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -624,18 +402,15 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: 32,
+              gap: 34,
             }}
           >
-            <GaneshMotifSVG
-              color={isHaldiLook ? '#B91C1C' : template.secondaryColor}
-              size={260}
-            />
+            <GaneshMotifSVG color={template.secondaryColor} size={270} />
             <div
               style={{
-                fontSize: 58,
+                fontSize: 56,
                 fontWeight: 700,
-                color: isHaldiLook ? '#B91C1C' : template.secondaryColor,
+                color: template.secondaryColor,
                 letterSpacing: '0.04em',
               }}
             >
@@ -645,7 +420,7 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
               style={{
                 fontSize: 34,
                 lineHeight: 1.5,
-                color: isHaldiLook ? '#7C2D12' : template.mutedTextColor,
+                color: template.mutedTextColor,
                 maxWidth: 780,
               }}
             >
@@ -653,14 +428,12 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
             </div>
             <div
               style={{
-                marginTop: 20,
+                marginTop: 24,
                 padding: '12px 36px',
                 borderRadius: 999,
-                border: `2px solid ${
-                  isHaldiLook ? '#D97706' : template.secondaryColor
-                }`,
+                border: `2px solid ${template.secondaryColor}`,
                 fontSize: 28,
-                color: isHaldiLook ? '#B45309' : template.secondaryColor,
+                color: template.secondaryColor,
               }}
             >
               {template.nameHindi} • {template.name}
@@ -668,114 +441,77 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
           </div>
         )}
 
-        {/* SCENE 2: SHUBH VIVAH / WEDDING INVITATION TITLE (Reference Screenshot 1 Style) */}
+        {/* SCENE 2: SHUBH VIVAH / WEDDING INVITATION TITLE */}
         {activeScene.kind === 'title' && (
           <div
             style={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: 18,
-              width: '100%',
+              gap: 28,
             }}
           >
-            <GaneshMotifSVG
-              color={isHaldiLook ? '#991B1B' : template.secondaryColor}
-              size={140}
-            />
-            <div
-              style={{
-                fontSize: 74,
-                fontWeight: 700,
-                lineHeight: 1.15,
-                color: isHaldiLook ? '#7F1D1D' : template.secondaryColor,
-                textShadow: '0 4px 18px rgba(0,0,0,0.18)',
-              }}
-            >
-              ॥ शुभविवाह ॥
-            </div>
-            <div
-              style={{
-                fontSize: 34,
-                fontStyle: 'italic',
-                fontWeight: 600,
-                color: template.textColor,
-              }}
-            >
-              Together with their families
-            </div>
-            <div
-              style={{
-                fontSize: 64,
-                fontWeight: 700,
-                color: isHaldiLook ? '#7F1D1D' : template.secondaryColor,
-                margin: '6px 0',
-                lineHeight: 1.15,
-              }}
-            >
-              {project.brideName} &amp; {project.groomName}
-            </div>
             <div
               style={{
                 fontSize: 32,
-                fontStyle: 'italic',
-                color: template.mutedTextColor,
-                maxWidth: 740,
+                textTransform: 'uppercase',
+                letterSpacing: '0.22em',
+                color: template.secondaryColor,
               }}
             >
-              Invite you to celebrate the beginning of their FOREVER
+              {copy.invocation}
             </div>
-
-            {/* Floral Swing / Jhula with Peacocks & Couple Portrait */}
             <div
               style={{
-                position: 'relative',
-                marginTop: 18,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
+                fontSize: 82,
+                fontWeight: 700,
+                lineHeight: 1.15,
+                color: template.secondaryColor,
+                textShadow: '0 6px 24px rgba(0,0,0,0.28)',
+                padding: '12px 0',
               }}
             >
-              <div
+              {copy.titleMain}
+            </div>
+            <div
+              style={{
+                width: 340,
+                height: 3,
+                background: template.secondaryColor,
+                margin: '8px 0',
+              }}
+            />
+            <div
+              style={{
+                fontSize: 38,
+                lineHeight: 1.45,
+                color: template.textColor,
+                maxWidth: 780,
+              }}
+            >
+              {copy.titleSub}
+            </div>
+            <div
+              style={{
+                marginTop: 32,
+                fontSize: 56,
+                fontWeight: 700,
+                color: template.secondaryColor,
+              }}
+            >
+              {project.brideName}
+              <span
                 style={{
-                  position: 'absolute',
-                  top: -25,
-                  left: -135,
-                  zIndex: 2,
+                  display: 'block',
+                  fontSize: 34,
+                  fontStyle: 'italic',
+                  margin: '10px 0',
+                  color: template.mutedTextColor,
                 }}
               >
-                <PeacockMotif />
-              </div>
-              <div
-                style={{
-                  position: 'absolute',
-                  top: -25,
-                  right: -135,
-                  zIndex: 2,
-                }}
-              >
-                <PeacockMotif flip />
-              </div>
-              {/* Top Floral Garland Bar of Jhula */}
-              <div
-                style={{
-                  width: 470,
-                  height: 36,
-                  borderRadius: 999,
-                  background:
-                    'linear-gradient(90deg, #EC4899, #A855F7, #FACC15, #10B981, #EC4899)',
-                  boxShadow: '0 6px 18px rgba(0,0,0,0.25)',
-                  marginBottom: -14,
-                  zIndex: 3,
-                }}
-              />
-              <FramedPhoto
-                slot={project.photos.couple}
-                size={360}
-                borderColor={template.secondaryColor}
-                accentColor={template.accentColor}
-                arch
-              />
+                {copy.wedsLabel}
+              </span>
+              {project.groomName}
             </div>
           </div>
         )}
@@ -787,7 +523,7 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: 20,
+              gap: 24,
               width: '100%',
             }}
           >
@@ -797,17 +533,18 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 36,
+                marginBottom: 8,
               }}
             >
               <FramedPhoto
                 slot={project.photos.bride}
-                size={240}
+                size={250}
                 borderColor={template.secondaryColor}
                 accentColor={template.accentColor}
               />
               <FramedPhoto
                 slot={project.photos.groom}
-                size={240}
+                size={250}
                 borderColor={template.secondaryColor}
                 accentColor={template.accentColor}
               />
@@ -815,7 +552,7 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
 
             <FramedPhoto
               slot={project.photos.couple}
-              size={370}
+              size={380}
               borderColor={template.secondaryColor}
               accentColor={template.accentColor}
               arch
@@ -823,11 +560,11 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
 
             <div
               style={{
-                fontSize: 60,
+                fontSize: 64,
                 fontWeight: 700,
                 lineHeight: 1.15,
                 color: template.secondaryColor,
-                marginTop: 8,
+                marginTop: 12,
                 maxWidth: 860,
                 wordBreak: 'break-word',
               }}
@@ -836,7 +573,7 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
             </div>
             <div
               style={{
-                fontSize: 32,
+                fontSize: 34,
                 letterSpacing: '0.18em',
                 textTransform: 'uppercase',
                 color: template.mutedTextColor,
@@ -846,7 +583,7 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
             </div>
             <div
               style={{
-                fontSize: 60,
+                fontSize: 64,
                 fontWeight: 700,
                 lineHeight: 1.15,
                 color: template.secondaryColor,
@@ -859,12 +596,12 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
             {project.hashtag && (
               <div
                 style={{
-                  marginTop: 6,
+                  marginTop: 8,
                   padding: '8px 28px',
                   borderRadius: 999,
                   background: `${template.secondaryColor}26`,
                   border: `1.5px solid ${template.secondaryColor}`,
-                  fontSize: 28,
+                  fontSize: 30,
                   color: template.secondaryColor,
                 }}
               >
@@ -881,7 +618,7 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: 26,
+              gap: 28,
               maxWidth: 840,
             }}
           >
@@ -969,292 +706,201 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
           </div>
         )}
 
-        {/* SCENES 5..N: SELECTED CEREMONY EVENTS (Reference Screenshot 2 Haldi Style) */}
-        {activeScene.kind === 'ceremony' && activeScene.ceremony && (() => {
-          const evt = activeScene.ceremony;
-          const dParts = parseDateParts(evt.date);
-          const isHaldiEvt = evt.type === 'haldi';
-          return (
+        {/* SCENES 5..N: SELECTED CEREMONY EVENTS (Haldi, Mehndi, Sangeet, etc.) */}
+        {activeScene.kind === 'ceremony' && activeScene.ceremony && (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 24,
+              width: '100%',
+            }}
+          >
             <div
               style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 16,
-                width: '100%',
+                padding: '10px 32px',
+                borderRadius: 999,
+                border: `2px solid ${template.secondaryColor}`,
+                fontSize: 28,
+                textTransform: 'uppercase',
+                letterSpacing: '0.14em',
+                color: template.secondaryColor,
               }}
             >
-              <GaneshMotifSVG
-                color={isHaldiEvt ? '#DC2626' : template.secondaryColor}
-                size={110}
-              />
-              <div
-                style={{
-                  fontSize: 34,
-                  fontWeight: 700,
-                  color: isHaldiEvt ? '#DC2626' : template.secondaryColor,
-                }}
-              >
-                ॥ श्री गणेशाय नमः ॥
-              </div>
+              {copy.ceremonyHeader}
+            </div>
 
-              <div
-                style={{
-                  fontSize: 34,
-                  fontStyle: 'italic',
-                  fontWeight: 700,
-                  color: isHaldiEvt ? '#451A03' : template.textColor,
-                  maxWidth: 740,
-                }}
-              >
-                {isHaldiEvt
-                  ? 'Dulha dulhan ko hai jaldi... Aao lagaye haldi'
-                  : evt.customMessage || copy.ceremonyHeader}
-              </div>
-
-              <div
-                style={{
-                  fontSize: 64,
-                  fontWeight: 700,
-                  color: isHaldiEvt
-                    ? '#D97706'
-                    : evt.type === 'mehndi'
-                    ? '#059669'
+            <div
+              style={{
+                fontSize: 74,
+                fontWeight: 700,
+                color:
+                  activeScene.ceremony.type === 'haldi'
+                    ? '#F59E0B'
+                    : activeScene.ceremony.type === 'mehndi'
+                    ? '#10B981'
                     : template.secondaryColor,
-                  lineHeight: 1.15,
-                }}
-              >
-                {evt.name}
-              </div>
+                lineHeight: 1.15,
+              }}
+            >
+              {activeScene.ceremony.name}
+            </div>
 
-              {/* Iconic Split Date Block from Reference Screenshot 2 */}
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 8,
-                  margin: '8px 0',
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 32,
-                    letterSpacing: '0.16em',
-                    color: isHaldiEvt ? '#57534E' : template.mutedTextColor,
-                  }}
-                >
-                  {dParts.monthUpper}
-                </div>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 28,
-                  }}
-                >
-                  <div
-                    style={{
-                      borderTop: '2px solid currentColor',
-                      borderBottom: '2px solid currentColor',
-                      padding: '8px 24px',
-                      fontSize: 32,
-                      minWidth: 190,
-                    }}
-                  >
-                    {dParts.weekday}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 78,
-                      fontWeight: 700,
-                      lineHeight: 1,
-                      color: isHaldiEvt ? '#451A03' : template.secondaryColor,
-                    }}
-                  >
-                    {dParts.day}
-                  </div>
-                  <div
-                    style={{
-                      borderTop: '2px solid currentColor',
-                      borderBottom: '2px solid currentColor',
-                      padding: '8px 24px',
-                      fontSize: 30,
-                      minWidth: 190,
-                    }}
-                  >
-                    {evt.time.split(' ')[0]} {evt.time.split(' ')[1] || ''}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    fontSize: 34,
-                    letterSpacing: '0.1em',
-                    color: isHaldiEvt ? '#57534E' : template.mutedTextColor,
-                  }}
-                >
-                  {dParts.year}
-                </div>
-              </div>
-
-              <div style={{ fontSize: 28, opacity: 0.75 }}>at</div>
+            <div
+              style={{
+                width: '100%',
+                maxWidth: 800,
+                padding: '38px 40px',
+                borderRadius: 28,
+                background: 'rgba(0,0,0,0.2)',
+                border: `2px solid ${template.secondaryColor}`,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 20,
+              }}
+            >
               <div
                 style={{
                   fontSize: 42,
                   fontWeight: 700,
-                  color: isHaldiEvt ? '#3E2723' : template.textColor,
-                  maxWidth: 780,
-                }}
-              >
-                {evt.venue}
-              </div>
-              {evt.address && (
-                <div
-                  style={{
-                    fontSize: 28,
-                    color: isHaldiEvt ? '#78350F' : template.mutedTextColor,
-                    maxWidth: 760,
-                  }}
-                >
-                  {evt.address}
-                </div>
-              )}
-
-              {/* Bottom Marigold Jhula Frame with Couple Portrait */}
-              <div
-                style={{
-                  marginTop: 12,
-                  position: 'relative',
-                  paddingTop: 18,
-                }}
-              >
-                <div
-                  style={{
-                    width: 420,
-                    height: 22,
-                    borderRadius: 999,
-                    background:
-                      'repeating-linear-gradient(90deg, #FACC15 0px, #FACC15 18px, #EA580C 18px, #EA580C 36px)',
-                    margin: '0 auto -10px auto',
-                    position: 'relative',
-                    zIndex: 2,
-                  }}
-                />
-                <FramedPhoto
-                  slot={project.photos.couple}
-                  size={310}
-                  borderColor={isHaldiEvt ? '#D97706' : template.secondaryColor}
-                  accentColor="#FDE047"
-                  arch
-                />
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* SCENE 8: MAIN WEDDING DATE, TIME, VENUE & PEACOCK MANDAP (Reference Screenshot 3 Style) */}
-        {activeScene.kind === 'wedding-main' && (() => {
-          const wParts = parseDateParts(project.weddingDate);
-          return (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 14,
-                width: '100%',
-                marginTop: 70,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 34,
-                  fontStyle: 'italic',
-                  fontWeight: 600,
                   color: template.textColor,
                 }}
               >
-                Together with our families
+                {formatReadableDate(activeScene.ceremony.date)}
               </div>
               <div
                 style={{
                   fontSize: 36,
-                  fontStyle: 'italic',
-                  color: template.mutedTextColor,
-                }}
-              >
-                We cordially invite you to join our wedding on
-              </div>
-
-              {/* Reference Screenshot 3 Date Row: NOV ⋮ 21 ⋮ 2026 */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 32,
-                  margin: '10px 0',
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 44,
-                    letterSpacing: '0.1em',
-                    color: template.textColor,
-                  }}
-                >
-                  {wParts.monthShort}
-                </div>
-                <div
-                  style={{
-                    height: 64,
-                    borderLeft: `3px dotted ${template.secondaryColor}`,
-                  }}
-                />
-                <div
-                  style={{
-                    fontSize: 92,
-                    fontWeight: 700,
-                    lineHeight: 1,
-                    color: template.secondaryColor,
-                  }}
-                >
-                  {wParts.day}
-                </div>
-                <div
-                  style={{
-                    height: 64,
-                    borderLeft: `3px dotted ${template.secondaryColor}`,
-                  }}
-                />
-                <div
-                  style={{
-                    fontSize: 44,
-                    letterSpacing: '0.08em',
-                    color: template.textColor,
-                  }}
-                >
-                  {wParts.year}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  fontSize: 30,
-                  fontWeight: 600,
                   color: template.secondaryColor,
+                  fontWeight: 600,
                 }}
               >
-                {project.weddingTime} • At
+                {activeScene.ceremony.time}
               </div>
-
+              <div
+                style={{
+                  width: 180,
+                  height: 2,
+                  background: template.secondaryColor,
+                  margin: '4px auto',
+                }}
+              />
               <div
                 style={{
                   fontSize: 40,
                   fontWeight: 700,
-                  fontStyle: 'italic',
                   color: template.textColor,
-                  maxWidth: 820,
+                }}
+              >
+                {activeScene.ceremony.venue}
+              </div>
+              {activeScene.ceremony.address && (
+                <div
+                  style={{
+                    fontSize: 30,
+                    color: template.mutedTextColor,
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {activeScene.ceremony.address}
+                </div>
+              )}
+              {activeScene.ceremony.customMessage && (
+                <div
+                  style={{
+                    marginTop: 8,
+                    padding: '10px 24px',
+                    borderRadius: 14,
+                    background: `${template.secondaryColor}26`,
+                    fontSize: 28,
+                    color: template.secondaryColor,
+                  }}
+                >
+                  ✦ {activeScene.ceremony.customMessage} ✦
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* SCENE 8: MAIN WEDDING DATE, TIME, VENUE & MANDAP */}
+        {activeScene.kind === 'wedding-main' && (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 22,
+              width: '100%',
+            }}
+          >
+            <div
+              style={{
+                fontSize: 30,
+                letterSpacing: '0.18em',
+                textTransform: 'uppercase',
+                color: template.secondaryColor,
+              }}
+            >
+              {copy.weddingSub}
+            </div>
+            <div
+              style={{
+                fontSize: 64,
+                fontWeight: 700,
+                color: template.secondaryColor,
+              }}
+            >
+              {copy.weddingHeader}
+            </div>
+
+            <FramedPhoto
+              slot={project.photos.couple}
+              size={360}
+              borderColor={template.secondaryColor}
+              accentColor={template.accentColor}
+              arch
+            />
+
+            <div
+              style={{
+                width: '100%',
+                maxWidth: 820,
+                padding: '30px 36px',
+                borderRadius: 26,
+                background: 'rgba(0,0,0,0.22)',
+                border: `2.5px solid ${template.secondaryColor}`,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 14,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 44,
+                  fontWeight: 700,
+                  color: template.secondaryColor,
+                }}
+              >
+                {formatReadableDate(project.weddingDate)}
+              </div>
+              <div style={{ fontSize: 34, color: template.textColor }}>
+                {project.weddingTime}
+              </div>
+              <div
+                style={{
+                  width: 200,
+                  height: 2,
+                  background: template.secondaryColor,
+                  margin: '6px auto',
+                }}
+              />
+              <div
+                style={{
+                  fontSize: 40,
+                  fontWeight: 700,
+                  color: template.textColor,
                 }}
               >
                 {project.weddingVenue}
@@ -1263,97 +909,14 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
                 style={{
                   fontSize: 28,
                   color: template.mutedTextColor,
-                  maxWidth: 780,
+                  lineHeight: 1.4,
                 }}
               >
                 {project.weddingAddress}
               </div>
-
-              {/* GOLDEN DOMED WEDDING MANDAP WITH TWO PEACOCKS & SACRED HAVAN FIRE */}
-              <div
-                style={{
-                  position: 'relative',
-                  marginTop: 18,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                }}
-              >
-                {/* Left & Right Perched Peacocks */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: -20,
-                    left: -135,
-                    zIndex: 3,
-                  }}
-                >
-                  <PeacockMotif />
-                </div>
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: -20,
-                    right: -135,
-                    zIndex: 3,
-                  }}
-                >
-                  <PeacockMotif flip />
-                </div>
-
-                {/* Golden Mandap Dome SVG */}
-                <svg
-                  width="460"
-                  height="110"
-                  viewBox="0 0 460 110"
-                  style={{ marginBottom: -18, zIndex: 2 }}
-                >
-                  <path
-                    d="M30 110 C60 28, 175 18, 230 4 C285 18, 400 28, 430 110 Z"
-                    fill="#FDE047"
-                    stroke="#D97706"
-                    strokeWidth="4"
-                  />
-                  {/* Marigold Toran across Mandap */}
-                  <rect
-                    x="20"
-                    y="92"
-                    width="420"
-                    height="18"
-                    rx="9"
-                    fill="#EA580C"
-                  />
-                </svg>
-
-                <FramedPhoto
-                  slot={project.photos.couple}
-                  size={330}
-                  borderColor={template.secondaryColor}
-                  accentColor={template.accentColor}
-                  arch
-                />
-
-                {/* Sacred Havan Kund Fire at base of Mandap */}
-                <div
-                  style={{
-                    marginTop: -22,
-                    zIndex: 4,
-                    padding: '6px 28px',
-                    borderRadius: 12,
-                    background: '#78350F',
-                    border: '2px solid #F59E0B',
-                    color: '#FEF08A',
-                    fontSize: 22,
-                    fontWeight: 700,
-                    boxShadow: '0 6px 20px rgba(245,158,11,0.5)',
-                  }}
-                >
-                  🔥 शुभ लग्न मंडप • Sacred Mandap 🔥
-                </div>
-              </div>
             </div>
-          );
-        })()}
+          </div>
+        )}
 
         {/* SCENE 9: FINAL INVITATION MESSAGE, FAMILY NAMES & THANK YOU */}
         {activeScene.kind === 'closing' && (
@@ -1362,14 +925,14 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: 24,
+              gap: 26,
               maxWidth: 820,
             }}
           >
             {project.photos.gallery?.url && (
               <FramedPhoto
                 slot={project.photos.gallery}
-                size={270}
+                size={280}
                 borderColor={template.secondaryColor}
                 accentColor={template.accentColor}
               />
@@ -1377,7 +940,7 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
 
             <div
               style={{
-                fontSize: 52,
+                fontSize: 54,
                 fontWeight: 700,
                 color: template.secondaryColor,
                 lineHeight: 1.2,
@@ -1421,8 +984,7 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
                   color: template.secondaryColor,
                 }}
               >
-                {project.rsvpDetails ||
-                  `${project.brideName} & ${project.groomName} Families`}
+                {project.rsvpDetails || `${project.brideName} & ${project.groomName} Families`}
               </div>
               {project.contactPhone && (
                 <div
@@ -1442,7 +1004,7 @@ export const WeddingInvitationVideo: React.FC<WeddingVideoProps> = ({
                 fontSize: 44,
                 fontWeight: 700,
                 color: template.secondaryColor,
-                marginTop: 8,
+                marginTop: 10,
               }}
             >
               {project.brideName} ♥ {project.groomName}
