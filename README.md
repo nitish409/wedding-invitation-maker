@@ -67,8 +67,8 @@ flowchart LR
 
 - **Frontend**: Next.js 14 (App Router), TypeScript, Tailwind CSS, Lucide Icons, Google Fonts (`Cormorant Garamond`, `Cinzel Decorative`, `Plus Jakarta Sans`, `Noto Serif Devanagari`).
 - **Live Browser Preview**: `@remotion/player` (`1080×1920`, `30 FPS`) with interactive scene jump pills.
-- **Server-Side MP4 Rendering Engine**: `@napi-rs/canvas` 1080×1920 frame renderer piped into `ffmpeg-static` (`libx264`, `yuv420p`, `30fps` + `aac` `192k` stereo audio with automatic loop, trim offset, 2s fade-in, and 2.5s fade-out).
-- **Database & Private Storage**: Dual-mode adapter supporting **Supabase PostgreSQL + Private Storage Buckets** (`supabase/migrations/001_initial_schema.sql`) and zero-config **Persistent Local Storage** (`data/db.json` + `data/storage/*`) with HMAC-SHA256 signed expiring download tokens.
+- **Server-Side MP4 Rendering Engine**: `@napi-rs/canvas` 1080×1920 frame renderer piped into `ffmpeg-static` (`libx264`, `yuv420p`, `30fps` + `aac` `192k` stereo audio with automatic loop, trim offset, 2s fade-in, and 2.5s fade-out), with automatic serverless binary provisioning in `os.tmpdir()`.
+- **Database & Private Object Storage**: Serverless-safe storage engine (`src/lib/storage/objectStorage.ts` + `src/lib/db/store.ts`) supporting **Supabase PostgreSQL + Private Storage Buckets** (`private-photos`, `custom-audio`, `rendered-videos`) and persistent local storage outside `/var/task`, using `os.tmpdir()` with automatic cleanup for temporary FFmpeg working files.
 
 ---
 
