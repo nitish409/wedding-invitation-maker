@@ -5,6 +5,8 @@ import { enqueueVideoRenderJob } from '@/lib/renderer/videoWorker';
 import { checkRateLimit } from '@/lib/security/tokens';
 import { isServerlessEnvironment } from '@/lib/storage/objectStorage';
 
+export const maxDuration = 60;
+
 export async function GET() {
   const [templates, musicTracks, settings] = await Promise.all([
     dbStore.listTemplates(false),
@@ -57,11 +59,9 @@ export async function POST(req: NextRequest) {
     let job = null;
     if (startRender) {
       job = await dbStore.createRenderJob(project.id);
-      if (isServerlessEnvironment()) {
-        // In serverless environments (Vercel/Lambda), background work after response is frozen;
-        // await or drive on job status poll.
-        void enqueueVideoRenderJob(job.id);
-      } else {
+      if (!isServerlessEnvironment()) {
+        // On dedicated servers, run in background queue immediately.
+        // On serverless (Vercel/Lambda), leave status='queued' so the status/render endpoint drives it cleanly without freezing mid-flight.
         void enqueueVideoRenderJob(job.id);
       }
     }

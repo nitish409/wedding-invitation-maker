@@ -7,6 +7,8 @@ import {
 } from '@/lib/renderer/videoWorker';
 import { isServerlessEnvironment } from '@/lib/storage/objectStorage';
 
+export const maxDuration = 60;
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: { id: string } }
@@ -92,7 +94,9 @@ export async function PUT(
 
     if (body.regenerate) {
       job = await dbStore.createRenderJob(existing.id);
-      void enqueueVideoRenderJob(job.id);
+      if (!isServerlessEnvironment()) {
+        void enqueueVideoRenderJob(job.id);
+      }
     }
 
     return NextResponse.json({

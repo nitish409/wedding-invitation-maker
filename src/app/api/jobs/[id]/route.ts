@@ -6,6 +6,8 @@ import {
 } from '@/lib/renderer/videoWorker';
 import { isServerlessEnvironment } from '@/lib/storage/objectStorage';
 
+export const maxDuration = 60;
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: { id: string } }
@@ -53,18 +55,26 @@ export async function POST(
     );
   }
 
-  const updated = await dbStore.updateRenderJob(job.id, {
+  let updated = await dbStore.updateRenderJob(job.id, {
     status: 'queued',
-    progress: 4,
-    attempts: (job.attempts || 1) + 1,
+    progress: 6,
+    attempts: 1,
     errorMessage: undefined,
     stageMessage: 'Re-queued for fresh HD video rendering...',
   });
 
-  void enqueueVideoRenderJob(job.id);
+  if (isServerlessEnvironment()) {
+    await executeRenderJob(job.id);
+    updated = (await dbStore.getRenderJobById(job.id)) || updated;
+  } else {
+    void enqueueVideoRenderJob(job.id);
+  }
+
+  const project = await dbStore.getProjectById(job.projectId);
 
   return NextResponse.json({
     success: true,
     job: updated,
+    project,
   });
 }

@@ -108,15 +108,27 @@ export async function POST(req: NextRequest) {
       );
 
       const token = createSignedToken(fileName, 'photo', 168); // 7 days
-      const url = `/api/media/photo/${encodeURIComponent(
+      const mediaUrl = `/api/media/photo/${encodeURIComponent(
         fileName
       )}?token=${encodeURIComponent(token)}`;
+      const useInlineDataUrl =
+        uploadResult.backend === 'local' &&
+        Boolean(
+          process.env.VERCEL ||
+            process.env.AWS_LAMBDA_FUNCTION_NAME ||
+            process.cwd().startsWith('/var/task')
+        ) &&
+        buffer.length <= 4 * 1024 * 1024;
+      const url = useInlineDataUrl
+        ? `data:${file.type};base64,${buffer.toString('base64')}`
+        : mediaUrl;
 
       return NextResponse.json({
         success: true,
         fileName: uploadResult.storageKey,
         storageBackend: uploadResult.backend,
         url,
+        mediaUrl,
         sizeBytes: buffer.length,
         mimeType: file.type,
       });
@@ -183,9 +195,20 @@ export async function POST(req: NextRequest) {
       );
 
       const token = createSignedToken(fileName, 'audio', 168);
-      const url = `/api/media/audio/${encodeURIComponent(
+      const mediaUrl = `/api/media/audio/${encodeURIComponent(
         fileName
       )}?token=${encodeURIComponent(token)}`;
+      const useInlineDataUrl =
+        uploadResult.backend === 'local' &&
+        Boolean(
+          process.env.VERCEL ||
+            process.env.AWS_LAMBDA_FUNCTION_NAME ||
+            process.cwd().startsWith('/var/task')
+        ) &&
+        buffer.length <= 4 * 1024 * 1024;
+      const url = useInlineDataUrl
+        ? `data:${effectiveMime};base64,${buffer.toString('base64')}`
+        : mediaUrl;
 
       return NextResponse.json({
         success: true,
@@ -193,6 +216,7 @@ export async function POST(req: NextRequest) {
         storageBackend: uploadResult.backend,
         title: file.name.replace(/\.[^.]+$/, ''),
         url,
+        mediaUrl,
         sizeBytes: buffer.length,
         mimeType: effectiveMime,
       });

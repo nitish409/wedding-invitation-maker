@@ -4,12 +4,15 @@ import path from 'path';
 import { dbStore } from '@/lib/db/store';
 import { objectStorage } from '@/lib/storage/objectStorage';
 import { verifySignedToken } from '@/lib/security/tokens';
+import { executeRenderJob } from '@/lib/renderer/videoWorker';
+
+export const maxDuration = 60;
 
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const job = await dbStore.getRenderJobById(params.id);
+  let job = await dbStore.getRenderJobById(params.id);
   if (!job || job.status !== 'completed' || !job.outputPath) {
     return NextResponse.json(
       { error: 'Rendered video is not ready or does not exist.' },
@@ -40,12 +43,28 @@ export async function GET(
   }
 
   // Retrieve MP4 buffer from objectStorage (Supabase Storage / persistent store)
-  const storageKey = path.basename(job.outputPath);
+  let storageKey = path.basename(job.outputPath);
   let fileBuffer = await objectStorage.downloadObject('renders', storageKey);
 
   // Legacy path fallback if outputPath was an absolute path
   if (!fileBuffer && fs.existsSync(job.outputPath)) {
     fileBuffer = fs.readFileSync(job.outputPath);
+  }
+
+  // If running in stateless serverless mode without Supabase and this request hit a cold container
+  // where os.tmpdir() doesn't have the MP4 yet, regenerate on-the-fly so the download always succeeds
+  if (!fileBuffer) {
+    await dbStore.updateRenderJob(job.id, {
+      status: 'queued',
+      progress: 10,
+      attempts: 1,
+    });
+    await executeRenderJob(job.id);
+    job = (await dbStore.getRenderJobById(params.id)) || job;
+    if (job.outputPath) {
+      storageKey = path.basename(job.outputPath);
+      fileBuffer = await objectStorage.downloadObject('renders', storageKey);
+    }
   }
 
   if (!fileBuffer) {

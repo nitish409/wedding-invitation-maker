@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { RenderJob, WeddingProject } from '@/types/wedding';
@@ -38,8 +38,11 @@ export default function ProjectStatusAndDownloadPage() {
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const inFlightRef = useRef(false);
 
   const fetchStatus = useCallback(async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     try {
       const res = await fetch(`/api/projects/${projectId}`, {
         cache: 'no-store',
@@ -54,6 +57,8 @@ export default function ProjectStatusAndDownloadPage() {
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load project');
       setLoading(false);
+    } finally {
+      inFlightRef.current = false;
     }
   }, [projectId]);
 
@@ -68,7 +73,7 @@ export default function ProjectStatusAndDownloadPage() {
     }
     const timer = setInterval(() => {
       void fetchStatus();
-    }, 1000);
+    }, 1500);
     return () => clearInterval(timer);
   }, [job, fetchStatus]);
 
@@ -171,11 +176,21 @@ export default function ProjectStatusAndDownloadPage() {
   const handleRetryRender = async () => {
     if (!job) return;
     setRetrying(true);
+    setJob({
+      ...job,
+      status: 'processing',
+      progress: 12,
+      errorMessage: undefined,
+      stageMessage: 'Re-rendering your HD Wedding Video...',
+    });
     try {
       const res = await fetch(`/api/jobs/${job.id}`, { method: 'POST' });
       const data = await res.json();
       if (data.job) {
         setJob(data.job);
+      }
+      if (data.project) {
+        setProject(data.project);
       }
     } finally {
       setRetrying(false);

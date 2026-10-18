@@ -24,6 +24,15 @@ export interface LoadedProjectImages {
 async function resolveAndLoadImage(url?: string): Promise<Image | undefined> {
   if (!url) return undefined;
   try {
+    // 0. Data URL (base64 inline image)
+    if (url.startsWith('data:image/')) {
+      const base64Part = url.split(',')[1];
+      if (base64Part) {
+        return await loadImage(Buffer.from(base64Part, 'base64'));
+      }
+      return await loadImage(url);
+    }
+
     // 1. Private uploaded photo stored via objectStorage (Supabase Storage / persistent store)
     if (url.startsWith('/api/media/photo/')) {
       const fileName = path.basename(
@@ -53,12 +62,7 @@ async function resolveAndLoadImage(url?: string): Promise<Image | undefined> {
       }
     }
 
-    // 4. Data URL
-    if (url.startsWith('data:image/')) {
-      return await loadImage(url);
-    }
-
-    // Fallback to couple sample portrait
+    // Fallback to couple sample portrait on disk
     const fallback = path.join(
       process.cwd(),
       'public',
@@ -68,6 +72,19 @@ async function resolveAndLoadImage(url?: string): Promise<Image | undefined> {
     if (fs.existsSync(fallback)) {
       return await loadImage(fs.readFileSync(fallback));
     }
+
+    // Ultimate in-memory fallback portrait if static sample is absent
+    const fallbackCanvas = createCanvas(400, 500);
+    const fCtx = fallbackCanvas.getContext('2d');
+    const grad = fCtx.createLinearGradient(0, 0, 0, 500);
+    grad.addColorStop(0, '#6B0F24');
+    grad.addColorStop(1, '#2D040D');
+    fCtx.fillStyle = grad;
+    fCtx.fillRect(0, 0, 400, 500);
+    fCtx.strokeStyle = '#D4AF37';
+    fCtx.lineWidth = 6;
+    fCtx.strokeRect(16, 16, 368, 468);
+    return await loadImage(fallbackCanvas.toBuffer('image/png'));
   } catch {
     // ignore load failure
   }

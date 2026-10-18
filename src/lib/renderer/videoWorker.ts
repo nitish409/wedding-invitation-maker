@@ -1,5 +1,7 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
+import zlib from 'zlib';
 import { spawn } from 'child_process';
 import ffmpegStatic from 'ffmpeg-static';
 import { dbStore } from '@/lib/db/store';
@@ -18,25 +20,100 @@ import {
   renderSingleVideoFrame,
 } from '@/lib/renderer/frameRenderer';
 
-function resolveFfmpegPath(): string {
-  if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
-    return ffmpegStatic;
+let cachedFfmpegPromise: Promise<string> | null = null;
+
+/**
+ * Ensures an executable FFmpeg binary is available both locally and in serverless (/var/task / Vercel).
+ * 1. Checks bundled ffmpeg-static paths.
+ * 2. Ensures execute bit (+x) by copying to os.tmpdir() if needed.
+ * 3. If the serverless bundler stripped the binary, automatically downloads & gunzips the official
+ *    ffmpeg-static release binary into os.tmpdir()/ffmpeg-bin/ffmpeg and marks it executable (0o755).
+ */
+async function ensureFfmpegBinary(): Promise<string> {
+  if (cachedFfmpegPromise) {
+    const existing = await cachedFfmpegPromise;
+    if (fs.existsSync(existing)) return existing;
+    cachedFfmpegPromise = null;
   }
-  const winFallback = path.join(
-    process.cwd(),
-    'node_modules',
-    'ffmpeg-static',
-    'ffmpeg.exe'
-  );
-  if (fs.existsSync(winFallback)) return winFallback;
-  const nixFallback = path.join(
-    process.cwd(),
-    'node_modules',
-    'ffmpeg-static',
-    'ffmpeg'
-  );
-  if (fs.existsSync(nixFallback)) return nixFallback;
-  return 'ffmpeg';
+
+  cachedFfmpegPromise = (async () => {
+    const ext = process.platform === 'win32' ? '.exe' : '';
+    const tmpBinDir = path.join(os.tmpdir(), 'shubhvivah-ffmpeg-bin');
+    const tmpBinPath = path.join(tmpBinDir, `ffmpeg${ext}`);
+
+    // If already prepared in os.tmpdir(), reuse immediately
+    if (fs.existsSync(tmpBinPath)) {
+      try {
+        const stat = fs.statSync(tmpBinPath);
+        if (stat.size > 1_000_000) {
+          if (process.platform !== 'win32') {
+            fs.chmodSync(tmpBinPath, 0o755);
+          }
+          return tmpBinPath;
+        }
+      } catch {
+        // continue
+      }
+    }
+
+    const candidates = [
+      ffmpegStatic || '',
+      path.join(process.cwd(), 'node_modules', 'ffmpeg-static', `ffmpeg${ext}`),
+      path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ffmpeg'),
+      '/var/task/node_modules/ffmpeg-static/ffmpeg',
+    ].filter(Boolean);
+
+    for (const candidate of candidates) {
+      if (fs.existsSync(candidate)) {
+        try {
+          if (process.platform === 'win32') {
+            return candidate;
+          }
+          // Test if candidate is directly executable
+          try {
+            fs.accessSync(candidate, fs.constants.X_OK);
+            return candidate;
+          } catch {
+            // Copy to os.tmpdir() and chmod +x if /var/task removed execute permission
+            fs.mkdirSync(tmpBinDir, { recursive: true });
+            fs.copyFileSync(candidate, tmpBinPath);
+            fs.chmodSync(tmpBinPath, 0o755);
+            return tmpBinPath;
+          }
+        } catch {
+          // try next candidate
+        }
+      }
+    }
+
+    // Fallback for serverless environments where the bundler stripped node_modules/ffmpeg-static/ffmpeg:
+    // Download & gunzip the official ffmpeg-static binary into os.tmpdir()
+    fs.mkdirSync(tmpBinDir, { recursive: true });
+    const platform = process.platform;
+    const arch = process.arch;
+    const downloadUrl = `https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-${platform}-${arch}.gz`;
+
+    const res = await fetch(downloadUrl, { redirect: 'follow' });
+    if (!res.ok) {
+      throw new Error(
+        `Failed to provision FFmpeg binary in serverless container (HTTP ${res.status})`
+      );
+    }
+    const compressedBuf = Buffer.from(await res.arrayBuffer());
+    const decompressedBuf = zlib.gunzipSync(compressedBuf);
+    fs.writeFileSync(tmpBinPath, decompressedBuf);
+    if (process.platform !== 'win32') {
+      fs.chmodSync(tmpBinPath, 0o755);
+    }
+    return tmpBinPath;
+  })();
+
+  try {
+    return await cachedFfmpegPromise;
+  } catch (err) {
+    cachedFfmpegPromise = null;
+    throw err;
+  }
 }
 
 /**
@@ -92,6 +169,17 @@ async function resolveAudioInputInTemp(
   musicUrl: string | undefined,
   tempWorkDir: string
 ): Promise<string> {
+  // 0. Base64 data URL (used in stateless serverless mode when custom audio is uploaded)
+  if (musicUrl && musicUrl.startsWith('data:audio/')) {
+    const base64Part = musicUrl.split(',')[1];
+    if (base64Part) {
+      const ext = musicUrl.includes('audio/mpeg') || musicUrl.includes('audio/mp3') ? '.mp3' : '.wav';
+      const tempAudioPath = path.join(tempWorkDir, `custom-inline-audio${ext}`);
+      fs.writeFileSync(tempAudioPath, Buffer.from(base64Part, 'base64'));
+      return tempAudioPath;
+    }
+  }
+
   // 1. Custom uploaded audio stored in objectStorage
   if (musicUrl && musicUrl.startsWith('/api/media/audio/')) {
     const fileName = path.basename(
@@ -196,9 +284,9 @@ export async function executeRenderJob(jobId: string): Promise<void> {
   const width = settings.resolutionWidth || 1080;
   const height = settings.resolutionHeight || 1920;
   const outputFps = settings.fps || 30;
-  // Use 10 unique animated frames/sec in serverless for fast completion within platform time limits,
+  // Use 6 unique animated frames/sec in serverless for fast completion (~5s) within Vercel limits,
   // or 15 unique frames/sec on dedicated servers; FFmpeg duplicates cleanly to 30 FPS H.264 output.
-  const renderFps = isServerlessEnvironment() ? 10 : 15;
+  const renderFps = isServerlessEnvironment() ? 6 : 15;
 
   // Create isolated temporary working directory in os.tmpdir() with { recursive: true }
   const tempWorkDir = objectStorage.createTempWorkingDir(`job-${job.id}`);
@@ -207,9 +295,11 @@ export async function executeRenderJob(jobId: string): Promise<void> {
     await dbStore.updateRenderJob(jobId, {
       status: 'processing',
       progress: 8,
-      stageMessage: 'Loading couple portraits & template artwork...',
+      stageMessage: 'Loading couple portraits & preparing video encoder...',
       errorMessage: undefined,
     });
+
+    const ffmpegBin = await ensureFfmpegBinary();
 
     const templates = await dbStore.listTemplates(true);
     const template = getTemplateById(project.templateId, templates);
@@ -236,8 +326,6 @@ export async function executeRenderJob(jobId: string): Promise<void> {
 
     const tempMp4Path = path.join(tempWorkDir, `invitation-${job.id}.tmp.mp4`);
     const outputObjectKey = `invitation-${job.id}.mp4`;
-
-    const ffmpegBin = resolveFfmpegPath();
 
     // Audio filter chain: volume + 2s fade-in + 2.5s fade-out
     const audioFilter = `volume=${volume.toFixed(
@@ -275,7 +363,7 @@ export async function executeRenderJob(jobId: string): Promise<void> {
       '-preset',
       'ultrafast',
       '-crf',
-      '22',
+      isServerlessEnvironment() ? '25' : '22',
       '-pix_fmt',
       'yuv420p',
       '-r',
@@ -353,7 +441,7 @@ export async function executeRenderJob(jobId: string): Promise<void> {
             frameIndex++;
 
             // Update progress periodically
-            if (frameIndex % 30 === 0 || frameIndex === totalFrames) {
+            if (frameIndex % 20 === 0 || frameIndex === totalFrames) {
               const pct = Math.min(
                 94,
                 Math.round(16 + (frameIndex / totalFrames) * 78)
