@@ -12,7 +12,7 @@ import {
   getLocalizedCopy,
   LocalizedLabels,
 } from '@/lib/video/sceneCalculator';
-import { STORAGE_DIRS } from '@/lib/db/store';
+import { objectStorage } from '@/lib/storage/objectStorage';
 
 export interface LoadedProjectImages {
   bride?: Image;
@@ -24,17 +24,27 @@ export interface LoadedProjectImages {
 async function resolveAndLoadImage(url?: string): Promise<Image | undefined> {
   if (!url) return undefined;
   try {
-    // Check if local public asset or private uploaded photo
+    // 1. Private uploaded photo stored via objectStorage (Supabase Storage / persistent store)
     if (url.startsWith('/api/media/photo/')) {
-      const fileName = decodeURIComponent(
-        url.replace('/api/media/photo/', '').split('?')[0]
+      const fileName = path.basename(
+        decodeURIComponent(url.replace('/api/media/photo/', '').split('?')[0])
       );
-      const fullPath = path.join(STORAGE_DIRS.photos, path.basename(fileName));
-      if (fs.existsSync(fullPath)) {
-        const buf = fs.readFileSync(fullPath);
+      const buf = await objectStorage.downloadObject('photos', fileName);
+      if (buf && buf.length > 0) {
         return await loadImage(buf);
       }
     }
+
+    // 2. Remote HTTP/HTTPS URL (e.g. direct Supabase signed URL)
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      const res = await fetch(url);
+      if (res.ok) {
+        const arr = await res.arrayBuffer();
+        return await loadImage(Buffer.from(arr));
+      }
+    }
+
+    // 3. Read-only static public asset (/samples/...)
     if (url.startsWith('/')) {
       const publicPath = path.join(process.cwd(), 'public', url.split('?')[0]);
       if (fs.existsSync(publicPath)) {
@@ -42,10 +52,13 @@ async function resolveAndLoadImage(url?: string): Promise<Image | undefined> {
         return await loadImage(buf);
       }
     }
+
+    // 4. Data URL
     if (url.startsWith('data:image/')) {
       return await loadImage(url);
     }
-    // Fallback to couple sample
+
+    // Fallback to couple sample portrait
     const fallback = path.join(
       process.cwd(),
       'public',

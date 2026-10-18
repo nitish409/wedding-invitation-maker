@@ -18,13 +18,23 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  const [stats, projects, jobs, templates, musicTracks, settings] =
+    await Promise.all([
+      dbStore.getUsageStats(),
+      dbStore.listProjects(),
+      dbStore.listRenderJobs(),
+      dbStore.listTemplates(true),
+      dbStore.listMusicTracks(true),
+      dbStore.getSettings(),
+    ]);
+
   return NextResponse.json({
-    stats: dbStore.getUsageStats(),
-    projects: dbStore.listProjects(),
-    jobs: dbStore.listRenderJobs(),
-    templates: dbStore.listTemplates(true),
-    musicTracks: dbStore.listMusicTracks(true),
-    settings: dbStore.getSettings(),
+    stats,
+    projects,
+    jobs,
+    templates,
+    musicTracks,
+    settings,
   });
 }
 
@@ -65,19 +75,20 @@ export async function POST(req: NextRequest) {
 
     switch (body.action) {
       case 'toggleTemplate': {
-        const updated = dbStore.toggleTemplate(body.templateId, Boolean(body.enabled));
+        const updated = await dbStore.toggleTemplate(
+          body.templateId,
+          Boolean(body.enabled)
+        );
         return NextResponse.json({
           success: true,
           template: updated,
-          templates: dbStore.listTemplates(true),
+          templates: await dbStore.listTemplates(true),
         });
       }
 
       case 'addTemplate': {
         const tpl: TemplateDefinition = {
-          id:
-            body.id ||
-            `custom-${Date.now().toString(36)}`,
+          id: body.id || `custom-${Date.now().toString(36)}`,
           name: body.name || 'Custom Royal Template',
           nameHindi: body.nameHindi || 'विशेष विवाह टेम्पलेट',
           subtitle: body.subtitle || 'Custom Palette & Royal Borders',
@@ -100,7 +111,7 @@ export async function POST(req: NextRequest) {
           ],
           motifStyle: body.motifStyle || 'mandala',
         };
-        const templates = dbStore.upsertTemplate(tpl);
+        const templates = await dbStore.upsertTemplate(tpl);
         return NextResponse.json({ success: true, templates });
       }
 
@@ -115,22 +126,23 @@ export async function POST(req: NextRequest) {
           isDefault: Boolean(body.isDefault),
           enabled: true,
           description:
-            body.description || 'Admin-approved royalty-free wedding music track.',
+            body.description ||
+            'Admin-approved royalty-free wedding music track.',
         };
-        const musicTracks = dbStore.addMusicTrack(track);
+        const musicTracks = await dbStore.addMusicTrack(track);
         return NextResponse.json({ success: true, musicTracks });
       }
 
       case 'toggleMusicTrack': {
-        dbStore.toggleMusicTrack(body.trackId, Boolean(body.enabled));
+        await dbStore.toggleMusicTrack(body.trackId, Boolean(body.enabled));
         return NextResponse.json({
           success: true,
-          musicTracks: dbStore.listMusicTracks(true),
+          musicTracks: await dbStore.listMusicTracks(true),
         });
       }
 
       case 'updateSettings': {
-        const settings = dbStore.updateSettings({
+        const settings = await dbStore.updateSettings({
           resolutionWidth: Number(body.resolutionWidth) || 1080,
           resolutionHeight: Number(body.resolutionHeight) || 1920,
           fps: Number(body.fps) || 30,
@@ -142,30 +154,30 @@ export async function POST(req: NextRequest) {
       }
 
       case 'retryJob': {
-        const job = dbStore.getRenderJobById(body.jobId);
+        const job = await dbStore.getRenderJobById(body.jobId);
         if (!job) {
           return NextResponse.json({ error: 'Job not found' }, { status: 404 });
         }
-        dbStore.updateRenderJob(job.id, {
+        await dbStore.updateRenderJob(job.id, {
           status: 'queued',
           progress: 5,
           attempts: (job.attempts || 1) + 1,
           errorMessage: undefined,
           stageMessage: 'Re-queued by Admin for fresh video render...',
         });
-        enqueueVideoRenderJob(job.id);
+        void enqueueVideoRenderJob(job.id);
         return NextResponse.json({
           success: true,
-          jobs: dbStore.listRenderJobs(),
+          jobs: await dbStore.listRenderJobs(),
         });
       }
 
       case 'cleanupStorage': {
-        const result = dbStore.cleanupExpiredFiles();
+        const result = await dbStore.cleanupExpiredFiles();
         return NextResponse.json({
           success: true,
           deletedFiles: result.deletedFiles,
-          stats: dbStore.getUsageStats(),
+          stats: await dbStore.getUsageStats(),
         });
       }
 
@@ -176,7 +188,8 @@ export async function POST(req: NextRequest) {
         );
     }
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Admin request failed';
+    const message =
+      err instanceof Error ? err.message : 'Admin request failed';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

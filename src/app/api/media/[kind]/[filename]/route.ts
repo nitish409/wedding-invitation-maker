@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs';
 import path from 'path';
-import { STORAGE_DIRS } from '@/lib/db/store';
+import { objectStorage } from '@/lib/storage/objectStorage';
 import { verifySignedToken } from '@/lib/security/tokens';
 
 export async function GET(
@@ -20,14 +19,16 @@ export async function GET(
     );
   }
 
-  const baseDir = kind === 'audio' ? STORAGE_DIRS.audio : STORAGE_DIRS.photos;
-  const fullPath = path.join(baseDir, safeName);
+  const bucketKind = kind === 'audio' ? 'audio' : 'photos';
+  const buffer = await objectStorage.downloadObject(bucketKind, safeName);
 
-  if (!fs.existsSync(fullPath)) {
-    return NextResponse.json({ error: 'Media file not found' }, { status: 404 });
+  if (!buffer) {
+    return NextResponse.json(
+      { error: 'Media file not found in storage' },
+      { status: 404 }
+    );
   }
 
-  const buffer = fs.readFileSync(fullPath);
   const ext = path.extname(safeName).toLowerCase();
   let contentType = 'application/octet-stream';
   if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
@@ -36,10 +37,11 @@ export async function GET(
   else if (ext === '.mp3') contentType = 'audio/mpeg';
   else if (ext === '.wav') contentType = 'audio/wav';
 
-  return new NextResponse(buffer, {
+  return new NextResponse(new Uint8Array(buffer), {
     status: 200,
     headers: {
       'Content-Type': contentType,
+      'Content-Length': String(buffer.length),
       'Cache-Control': 'private, max-age=3600',
     },
   });

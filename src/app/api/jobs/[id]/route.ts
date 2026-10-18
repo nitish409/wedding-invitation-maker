@@ -1,17 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbStore } from '@/lib/db/store';
-import { enqueueVideoRenderJob } from '@/lib/renderer/videoWorker';
+import {
+  enqueueVideoRenderJob,
+  executeRenderJob,
+} from '@/lib/renderer/videoWorker';
+import { isServerlessEnvironment } from '@/lib/storage/objectStorage';
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const job = dbStore.getRenderJobById(params.id);
+  let job = await dbStore.getRenderJobById(params.id);
   if (!job) {
-    return NextResponse.json({ error: 'Render job not found' }, { status: 404 });
+    return NextResponse.json(
+      { error: 'Render job not found' },
+      { status: 404 }
+    );
   }
 
-  const project = dbStore.getProjectById(job.projectId);
+  // In serverless environments, if a job is still in 'queued' state when polled,
+  // drive the render within this request so it completes reliably.
+  if (isServerlessEnvironment() && job.status === 'queued') {
+    await executeRenderJob(job.id);
+    job = (await dbStore.getRenderJobById(params.id)) || job;
+  }
+
+  const project = await dbStore.getProjectById(job.projectId);
   const downloadUrl =
     job.status === 'completed' && job.downloadToken
       ? `/api/download/${job.id}?token=${encodeURIComponent(job.downloadToken)}`
@@ -31,12 +45,15 @@ export async function POST(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const job = dbStore.getRenderJobById(params.id);
+  const job = await dbStore.getRenderJobById(params.id);
   if (!job) {
-    return NextResponse.json({ error: 'Render job not found' }, { status: 404 });
+    return NextResponse.json(
+      { error: 'Render job not found' },
+      { status: 404 }
+    );
   }
 
-  const updated = dbStore.updateRenderJob(job.id, {
+  const updated = await dbStore.updateRenderJob(job.id, {
     status: 'queued',
     progress: 4,
     attempts: (job.attempts || 1) + 1,
@@ -44,7 +61,7 @@ export async function POST(
     stageMessage: 'Re-queued for fresh HD video rendering...',
   });
 
-  enqueueVideoRenderJob(job.id);
+  void enqueueVideoRenderJob(job.id);
 
   return NextResponse.json({
     success: true,

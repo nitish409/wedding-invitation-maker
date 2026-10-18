@@ -3,11 +3,14 @@ import { dbStore } from '@/lib/db/store';
 import { weddingProjectInputSchema } from '@/lib/validation/projectSchema';
 import { enqueueVideoRenderJob } from '@/lib/renderer/videoWorker';
 import { checkRateLimit } from '@/lib/security/tokens';
+import { isServerlessEnvironment } from '@/lib/storage/objectStorage';
 
 export async function GET() {
-  const templates = dbStore.listTemplates(false);
-  const musicTracks = dbStore.listMusicTracks(false);
-  const settings = dbStore.getSettings();
+  const [templates, musicTracks, settings] = await Promise.all([
+    dbStore.listTemplates(false),
+    dbStore.listMusicTracks(false),
+    dbStore.getSettings(),
+  ]);
   return NextResponse.json({
     templates,
     musicTracks,
@@ -18,7 +21,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const ip = req.headers.get('x-forwarded-for') || 'local-user';
-    const settings = dbStore.getSettings();
+    const settings = await dbStore.getSettings();
     const rate = checkRateLimit(
       `render:${ip}`,
       settings.maxRendersPerIpHour || 20,
@@ -48,18 +51,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const project = dbStore.createProject(parsed.data);
+    const project = await dbStore.createProject(parsed.data);
     const startRender = body.startRender !== false;
 
     let job = null;
     if (startRender) {
-      job = dbStore.createRenderJob(project.id);
-      enqueueVideoRenderJob(job.id);
+      job = await dbStore.createRenderJob(project.id);
+      if (isServerlessEnvironment()) {
+        // In serverless environments (Vercel/Lambda), background work after response is frozen;
+        // await or drive on job status poll.
+        void enqueueVideoRenderJob(job.id);
+      } else {
+        void enqueueVideoRenderJob(job.id);
+      }
     }
 
     return NextResponse.json({
       success: true,
-      project: dbStore.getProjectById(project.id),
+      project: await dbStore.getProjectById(project.id),
       job,
     });
   } catch (err: unknown) {

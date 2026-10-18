@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import crypto from 'crypto';
 import {
   MusicTrackItem,
@@ -15,14 +13,11 @@ import {
   DEFAULT_TEMPLATES,
 } from '@/lib/constants/templates';
 import { createSignedToken } from '@/lib/security/tokens';
-
-const DATA_DIR = path.join(process.cwd(), 'data');
-const DB_FILE = path.join(DATA_DIR, 'db.json');
-export const STORAGE_DIRS = {
-  photos: path.join(DATA_DIR, 'storage', 'photos'),
-  audio: path.join(DATA_DIR, 'storage', 'audio'),
-  renders: path.join(DATA_DIR, 'storage', 'renders'),
-};
+import {
+  getSupabaseAdminClient,
+  isSupabaseConfigured,
+  objectStorage,
+} from '@/lib/storage/objectStorage';
 
 interface DatabaseSchema {
   projects: WeddingProject[];
@@ -32,58 +27,146 @@ interface DatabaseSchema {
   settings: SystemSettings;
 }
 
-function ensureDirectories() {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.mkdirSync(STORAGE_DIRS.photos, { recursive: true });
-  fs.mkdirSync(STORAGE_DIRS.audio, { recursive: true });
-  fs.mkdirSync(STORAGE_DIRS.renders, { recursive: true });
+const DB_OBJECT_KEY = 'db-state.json';
+
+// In-memory state mirror for fast reads between persistent flushes
+let memoryDbCache: DatabaseSchema | null = null;
+
+function createInitialDb(): DatabaseSchema {
+  return {
+    projects: [],
+    renderJobs: [],
+    templates: DEFAULT_TEMPLATES,
+    musicTracks: DEFAULT_MUSIC_TRACKS,
+    settings: DEFAULT_SYSTEM_SETTINGS,
+  };
 }
 
-function loadDb(): DatabaseSchema {
-  ensureDirectories();
-  if (!fs.existsSync(DB_FILE)) {
-    const initial: DatabaseSchema = {
-      projects: [],
-      renderJobs: [],
-      templates: DEFAULT_TEMPLATES,
-      musicTracks: DEFAULT_MUSIC_TRACKS,
-      settings: DEFAULT_SYSTEM_SETTINGS,
-    };
-    fs.writeFileSync(DB_FILE, JSON.stringify(initial, null, 2), 'utf-8');
-    return initial;
-  }
+function normalizeDb(parsed: Partial<DatabaseSchema> | null): DatabaseSchema {
+  if (!parsed) return createInitialDb();
+  return {
+    projects: Array.isArray(parsed.projects) ? parsed.projects : [],
+    renderJobs: Array.isArray(parsed.renderJobs) ? parsed.renderJobs : [],
+    templates:
+      Array.isArray(parsed.templates) && parsed.templates.length > 0
+        ? parsed.templates
+        : DEFAULT_TEMPLATES,
+    musicTracks:
+      Array.isArray(parsed.musicTracks) && parsed.musicTracks.length > 0
+        ? parsed.musicTracks
+        : DEFAULT_MUSIC_TRACKS,
+    settings: parsed.settings || DEFAULT_SYSTEM_SETTINGS,
+  };
+}
+
+async function loadDb(): Promise<DatabaseSchema> {
   try {
-    const raw = fs.readFileSync(DB_FILE, 'utf-8');
-    const parsed = JSON.parse(raw) as Partial<DatabaseSchema>;
-    return {
-      projects: parsed.projects || [],
-      renderJobs: parsed.renderJobs || [],
-      templates:
-        parsed.templates && parsed.templates.length > 0
-          ? parsed.templates
-          : DEFAULT_TEMPLATES,
-      musicTracks:
-        parsed.musicTracks && parsed.musicTracks.length > 0
-          ? parsed.musicTracks
-          : DEFAULT_MUSIC_TRACKS,
-      settings: parsed.settings || DEFAULT_SYSTEM_SETTINGS,
-    };
+    const rawBuf = await objectStorage.downloadObject('db', DB_OBJECT_KEY);
+    if (rawBuf) {
+      const parsed = JSON.parse(
+        rawBuf.toString('utf-8')
+      ) as Partial<DatabaseSchema>;
+      memoryDbCache = normalizeDb(parsed);
+      return memoryDbCache;
+    }
   } catch {
-    return {
-      projects: [],
-      renderJobs: [],
-      templates: DEFAULT_TEMPLATES,
-      musicTracks: DEFAULT_MUSIC_TRACKS,
-      settings: DEFAULT_SYSTEM_SETTINGS,
-    };
+    // Fallback to in-memory or initial DB if first boot
+  }
+
+  if (memoryDbCache) {
+    return memoryDbCache;
+  }
+
+  const initial = createInitialDb();
+  memoryDbCache = initial;
+  try {
+    await objectStorage.uploadObject(
+      'db',
+      DB_OBJECT_KEY,
+      Buffer.from(JSON.stringify(initial, null, 2), 'utf-8'),
+      'application/json'
+    );
+  } catch {
+    // Ignore initial seed error if storage not ready
+  }
+  return initial;
+}
+
+async function saveDb(db: DatabaseSchema): Promise<void> {
+  memoryDbCache = db;
+  await objectStorage.uploadObject(
+    'db',
+    DB_OBJECT_KEY,
+    Buffer.from(JSON.stringify(db, null, 2), 'utf-8'),
+    'application/json'
+  );
+}
+
+/**
+ * Best-effort sync to Supabase PostgreSQL tables when configured & migrated.
+ */
+async function syncProjectToSupabaseTable(project: WeddingProject) {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return;
+  try {
+    await supabase.from('projects').upsert({
+      id: project.id,
+      slug: project.slug,
+      template_id: project.templateId,
+      language: project.language,
+      bride_name: project.brideName,
+      groom_name: project.groomName,
+      bride_parents: project.brideParents,
+      groom_parents: project.groomParents,
+      family_message: project.familyMessage,
+      hashtag: project.hashtag,
+      contact_phone: project.contactPhone,
+      wedding_date: project.weddingDate,
+      wedding_time: project.weddingTime,
+      wedding_venue: project.weddingVenue,
+      wedding_address: project.weddingAddress,
+      maps_url: project.mapsUrl,
+      rsvp_details: project.rsvpDetails,
+      events: project.events,
+      photos: project.photos,
+      music: project.music,
+      consent_accepted: project.consentAccepted,
+      is_public: project.isPublic ?? true,
+      latest_job_id: project.latestJobId || null,
+      rendered_video_url: project.renderedVideoUrl || null,
+      created_at: project.createdAt,
+      updated_at: project.updatedAt,
+    });
+  } catch {
+    // Ignore if SQL migration hasn't been executed yet; objectStorage DB state handles persistence
   }
 }
 
-function saveDb(db: DatabaseSchema) {
-  ensureDirectories();
-  const tmpFile = `${DB_FILE}.tmp`;
-  fs.writeFileSync(tmpFile, JSON.stringify(db, null, 2), 'utf-8');
-  fs.renameSync(tmpFile, DB_FILE);
+async function syncJobToSupabaseTable(job: RenderJob) {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return;
+  try {
+    await supabase.from('render_jobs').upsert({
+      id: job.id,
+      project_id: job.projectId,
+      status: job.status,
+      progress: job.progress,
+      stage_message: job.stageMessage,
+      output_path: job.outputPath || null,
+      output_size_bytes: job.outputSizeBytes || null,
+      duration_sec: job.durationSec || null,
+      resolution: job.resolution,
+      fps: job.fps,
+      attempts: job.attempts,
+      error_message: job.errorMessage || null,
+      expires_at: job.expiresAt || null,
+      created_at: job.createdAt,
+      updated_at: job.updatedAt,
+      completed_at: job.completedAt || null,
+    });
+  } catch {
+    // Ignore if SQL migration hasn't been executed yet
+  }
 }
 
 function generateSlug(brideName: string, groomName: string): string {
@@ -98,8 +181,8 @@ function generateSlug(brideName: string, groomName: string): string {
 
 export const dbStore = {
   // Projects
-  createProject(input: WeddingProjectInput): WeddingProject {
-    const db = loadDb();
+  async createProject(input: WeddingProjectInput): Promise<WeddingProject> {
+    const db = await loadDb();
     const now = new Date().toISOString();
     const project: WeddingProject = {
       ...input,
@@ -110,15 +193,16 @@ export const dbStore = {
       updatedAt: now,
     };
     db.projects.unshift(project);
-    saveDb(db);
+    await saveDb(db);
+    await syncProjectToSupabaseTable(project);
     return project;
   },
 
-  updateProject(
+  async updateProject(
     id: string,
     patch: Partial<WeddingProject>
-  ): WeddingProject | null {
-    const db = loadDb();
+  ): Promise<WeddingProject | null> {
+    const db = await loadDb();
     const idx = db.projects.findIndex((p) => p.id === id);
     if (idx === -1) return null;
     db.projects[idx] = {
@@ -127,27 +211,29 @@ export const dbStore = {
       id: db.projects[idx].id,
       updatedAt: new Date().toISOString(),
     };
-    saveDb(db);
+    await saveDb(db);
+    await syncProjectToSupabaseTable(db.projects[idx]);
     return db.projects[idx];
   },
 
-  getProjectById(id: string): WeddingProject | null {
-    const db = loadDb();
+  async getProjectById(id: string): Promise<WeddingProject | null> {
+    const db = await loadDb();
     return db.projects.find((p) => p.id === id) || null;
   },
 
-  getProjectBySlug(slug: string): WeddingProject | null {
-    const db = loadDb();
+  async getProjectBySlug(slug: string): Promise<WeddingProject | null> {
+    const db = await loadDb();
     return db.projects.find((p) => p.slug === slug || p.id === slug) || null;
   },
 
-  listProjects(): WeddingProject[] {
-    return loadDb().projects;
+  async listProjects(): Promise<WeddingProject[]> {
+    const db = await loadDb();
+    return db.projects;
   },
 
   // Render Jobs
-  createRenderJob(projectId: string): RenderJob {
-    const db = loadDb();
+  async createRenderJob(projectId: string): Promise<RenderJob> {
+    const db = await loadDb();
     const settings = db.settings || DEFAULT_SYSTEM_SETTINGS;
     const now = new Date().toISOString();
     const jobId = crypto.randomUUID();
@@ -180,13 +266,18 @@ export const dbStore = {
     if (pIdx !== -1) {
       db.projects[pIdx].latestJobId = job.id;
       db.projects[pIdx].updatedAt = now;
+      await syncProjectToSupabaseTable(db.projects[pIdx]);
     }
-    saveDb(db);
+    await saveDb(db);
+    await syncJobToSupabaseTable(job);
     return job;
   },
 
-  updateRenderJob(id: string, patch: Partial<RenderJob>): RenderJob | null {
-    const db = loadDb();
+  async updateRenderJob(
+    id: string,
+    patch: Partial<RenderJob>
+  ): Promise<RenderJob | null> {
+    const db = await loadDb();
     const idx = db.renderJobs.findIndex((j) => j.id === id);
     if (idx === -1) return null;
     const now = new Date().toISOString();
@@ -204,114 +295,130 @@ export const dbStore = {
           updatedJob.downloadToken
         )}`;
         db.projects[pIdx].updatedAt = now;
+        await syncProjectToSupabaseTable(db.projects[pIdx]);
       }
     }
 
-    saveDb(db);
+    await saveDb(db);
+    await syncJobToSupabaseTable(updatedJob);
     return updatedJob;
   },
 
-  getRenderJobById(id: string): RenderJob | null {
-    return loadDb().renderJobs.find((j) => j.id === id) || null;
+  async getRenderJobById(id: string): Promise<RenderJob | null> {
+    const db = await loadDb();
+    return db.renderJobs.find((j) => j.id === id) || null;
   },
 
-  listRenderJobs(): RenderJob[] {
-    return loadDb().renderJobs;
+  async listRenderJobs(): Promise<RenderJob[]> {
+    const db = await loadDb();
+    return db.renderJobs;
   },
 
   // Templates & Music
-  listTemplates(includeDisabled = false): TemplateDefinition[] {
-    const templates = loadDb().templates;
-    return includeDisabled ? templates : templates.filter((t) => t.enabled);
+  async listTemplates(includeDisabled = false): Promise<TemplateDefinition[]> {
+    const db = await loadDb();
+    return includeDisabled
+      ? db.templates
+      : db.templates.filter((t) => t.enabled);
   },
 
-  upsertTemplate(template: TemplateDefinition): TemplateDefinition[] {
-    const db = loadDb();
+  async upsertTemplate(
+    template: TemplateDefinition
+  ): Promise<TemplateDefinition[]> {
+    const db = await loadDb();
     const idx = db.templates.findIndex((t) => t.id === template.id);
     if (idx >= 0) {
       db.templates[idx] = template;
     } else {
       db.templates.push(template);
     }
-    saveDb(db);
+    await saveDb(db);
     return db.templates;
   },
 
-  toggleTemplate(id: string, enabled: boolean): TemplateDefinition | null {
-    const db = loadDb();
+  async toggleTemplate(
+    id: string,
+    enabled: boolean
+  ): Promise<TemplateDefinition | null> {
+    const db = await loadDb();
     const idx = db.templates.findIndex((t) => t.id === id);
     if (idx === -1) return null;
     db.templates[idx].enabled = enabled;
-    saveDb(db);
+    await saveDb(db);
     return db.templates[idx];
   },
 
-  listMusicTracks(includeDisabled = false): MusicTrackItem[] {
-    const tracks = loadDb().musicTracks;
-    return includeDisabled ? tracks : tracks.filter((t) => t.enabled);
+  async listMusicTracks(includeDisabled = false): Promise<MusicTrackItem[]> {
+    const db = await loadDb();
+    return includeDisabled
+      ? db.musicTracks
+      : db.musicTracks.filter((t) => t.enabled);
   },
 
-  addMusicTrack(track: MusicTrackItem): MusicTrackItem[] {
-    const db = loadDb();
+  async addMusicTrack(track: MusicTrackItem): Promise<MusicTrackItem[]> {
+    const db = await loadDb();
     const idx = db.musicTracks.findIndex((t) => t.id === track.id);
     if (idx >= 0) {
       db.musicTracks[idx] = track;
     } else {
       db.musicTracks.push(track);
     }
-    saveDb(db);
+    await saveDb(db);
     return db.musicTracks;
   },
 
-  toggleMusicTrack(id: string, enabled: boolean): MusicTrackItem | null {
-    const db = loadDb();
+  async toggleMusicTrack(
+    id: string,
+    enabled: boolean
+  ): Promise<MusicTrackItem | null> {
+    const db = await loadDb();
     const idx = db.musicTracks.findIndex((t) => t.id === id);
     if (idx === -1) return null;
     db.musicTracks[idx].enabled = enabled;
-    saveDb(db);
+    await saveDb(db);
     return db.musicTracks[idx];
   },
 
-  getSettings(): SystemSettings {
-    return loadDb().settings;
+  async getSettings(): Promise<SystemSettings> {
+    const db = await loadDb();
+    return db.settings;
   },
 
-  updateSettings(patch: Partial<SystemSettings>): SystemSettings {
-    const db = loadDb();
+  async updateSettings(
+    patch: Partial<SystemSettings>
+  ): Promise<SystemSettings> {
+    const db = await loadDb();
     db.settings = {
       ...db.settings,
       ...patch,
       updatedAt: new Date().toISOString(),
     };
-    saveDb(db);
+    await saveDb(db);
     return db.settings;
   },
 
   // Storage & Usage Metrics + Temp File Cleanup
-  getUsageStats() {
-    ensureDirectories();
-    const db = loadDb();
-    const calcDirSize = (dir: string) => {
-      if (!fs.existsSync(dir)) return { count: 0, bytes: 0 };
-      const files = fs.readdirSync(dir);
-      let bytes = 0;
-      for (const f of files) {
-        try {
-          const st = fs.statSync(path.join(dir, f));
-          if (st.isFile()) bytes += st.size;
-        } catch {
-          // ignore
-        }
-      }
-      return { count: files.length, bytes };
-    };
+  async getUsageStats() {
+    const db = await loadDb();
+    const [photosList, audioList, rendersList] = await Promise.all([
+      objectStorage.listObjects('photos'),
+      objectStorage.listObjects('audio'),
+      objectStorage.listObjects('renders'),
+    ]);
 
-    const photosStat = calcDirSize(STORAGE_DIRS.photos);
-    const audioStat = calcDirSize(STORAGE_DIRS.audio);
-    const rendersStat = calcDirSize(STORAGE_DIRS.renders);
+    const sumBytes = (items: Array<{ sizeBytes: number }>) =>
+      items.reduce((acc, item) => acc + (item.sizeBytes || 0), 0);
 
-    const completedJobs = db.renderJobs.filter((j) => j.status === 'completed').length;
-    const failedJobs = db.renderJobs.filter((j) => j.status === 'failed').length;
+    const photosBytes = sumBytes(photosList);
+    const audioBytes = sumBytes(audioList);
+    const rendersBytes = sumBytes(rendersList);
+
+    const completedJobs = db.renderJobs.filter(
+      (j) => j.status === 'completed'
+    ).length;
+    const failedJobs = db.renderJobs.filter(
+      (j) => j.status === 'failed'
+    ).length;
     const activeJobs = db.renderJobs.filter(
       (j) => j.status === 'queued' || j.status === 'processing'
     ).length;
@@ -322,22 +429,21 @@ export const dbStore = {
       completedJobs,
       failedJobs,
       activeJobs,
+      storageBackend: isSupabaseConfigured() ? 'supabase' : 'local',
       storage: {
-        photosCount: photosStat.count,
-        photosBytes: photosStat.bytes,
-        audioCount: audioStat.count,
-        audioBytes: audioStat.bytes,
-        rendersCount: rendersStat.count,
-        rendersBytes: rendersStat.bytes,
-        totalBytes: photosStat.bytes + audioStat.bytes + rendersStat.bytes,
+        photosCount: photosList.length,
+        photosBytes,
+        audioCount: audioList.length,
+        audioBytes,
+        rendersCount: rendersList.length,
+        rendersBytes,
+        totalBytes: photosBytes + audioBytes + rendersBytes,
       },
     };
   },
 
-  cleanupExpiredFiles(): { deletedFiles: number } {
-    ensureDirectories();
-    const db = loadDb();
-    const maxAgeMs = (db.settings.autoDeleteTempHours || 24) * 3600 * 1000;
+  async cleanupExpiredFiles(): Promise<{ deletedFiles: number }> {
+    const db = await loadDb();
     const now = Date.now();
     let deletedFiles = 0;
 
@@ -345,32 +451,13 @@ export const dbStore = {
       if (
         job.expiresAt &&
         new Date(job.expiresAt).getTime() < now &&
-        job.outputPath &&
-        fs.existsSync(job.outputPath)
+        job.outputPath
       ) {
-        try {
-          fs.unlinkSync(job.outputPath);
-          deletedFiles++;
-        } catch {
-          // ignore
-        }
-      }
-    }
-
-    // Also clean orphan temp files older than maxAgeMs
-    const rendersFiles = fs.readdirSync(STORAGE_DIRS.renders);
-    for (const f of rendersFiles) {
-      if (f.endsWith('.tmp.mp4')) {
-        const full = path.join(STORAGE_DIRS.renders, f);
-        try {
-          const st = fs.statSync(full);
-          if (now - st.mtimeMs > maxAgeMs) {
-            fs.unlinkSync(full);
-            deletedFiles++;
-          }
-        } catch {
-          // ignore
-        }
+        const removed = await objectStorage.deleteObject(
+          'renders',
+          job.outputPath
+        );
+        if (removed) deletedFiles++;
       }
     }
 

@@ -1,37 +1,39 @@
-# Deployment Guide — ShubhVivah Studio
+# Deployment & Supabase Storage Guide — ShubhVivah Studio
 
-Because ShubhVivah Studio performs real server-side **1080×1920 H.264 + AAC MP4 video encoding** using `@napi-rs/canvas` and `ffmpeg-static`, deploy the application to a platform that supports persistent Node.js processes and long-running background jobs.
+ShubhVivah Studio is architected to never write persistent files to `/var/task`, `process.cwd()/data`, or any read-only serverless bundle directory.
 
----
-
-## 1. Recommended Deployment Platforms
-
-1. **Railway.app / Render.com / Fly.io / DigitalOcean App Platform (Recommended)**:
-   - Supports full Node.js runtime, native `@napi-rs/canvas` binaries, `ffmpeg-static`, persistent volumes (or Supabase Storage), and background worker execution without 10-second serverless timeouts.
-2. **Docker / VPS (Ubuntu 22.04+ / Debian)**:
-   - Install Hindi & Indian script system fonts so Devanagari renders crisply on Linux servers:
-     ```bash
-     sudo apt-get update && sudo apt-get install -y fonts-noto-core fonts-noto-extra fontconfig
-     ```
+- **Uploaded Photos, Custom Audio & Rendered MP4s** are stored via [`src/lib/storage/objectStorage.ts`](./src/lib/storage/objectStorage.ts) in **Supabase Storage** (`private-photos`, `custom-audio`, `rendered-videos` buckets) when Supabase credentials are configured, or in an OS-appropriate persistent storage directory outside `/var/task` for local development.
+- **Wedding Invitation Projects & Render Jobs** are stored via [`src/lib/db/store.ts`](./src/lib/db/store.ts) in **Supabase PostgreSQL** (`projects`, `render_jobs`) and persistent object storage.
+- **Temporary FFmpeg Video Processing Files** are created exclusively inside `os.tmpdir()` (`path.join(os.tmpdir(), 'shubhvivah-work', ...)`) with `{ recursive: true }` and are automatically deleted in a `finally` block immediately after the rendered MP4 is uploaded.
 
 ---
 
-## 2. Configuring Supabase for Production
+## 1. Required Environment Variables for Vercel / Serverless Deployment
 
-1. Create a new project at [database.new](https://database.new).
-2. Open the **SQL Editor** in your Supabase Dashboard and execute:
+Configure the following environment variables in your Vercel Project Settings (**Settings → Environment Variables**):
+
+| Environment Variable | Required | Description |
+| :--- | :---: | :--- |
+| `NEXT_PUBLIC_SUPABASE_URL` | **Yes** (Production) | Your Supabase Project URL (e.g. `https://xyzcompany.supabase.co`) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | **Yes** (Production) | Your Supabase `anon` public API key |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Yes** (Recommended) | Your Supabase `service_role` secret key (allows the server to auto-create private storage buckets and bypass RLS for server-side uploads/renders) |
+| `DOWNLOAD_SIGNING_SECRET` | **Yes** | Any strong random string used to sign expiring MP4 & private media URLs |
+| `ADMIN_PASSCODE` | **Yes** | Passcode for accessing `/admin` (default: `shubhvivah-admin-2026`) |
+| `NEXT_PUBLIC_APP_URL` | Optional | Your deployed domain (e.g. `https://wedding-invitation-maker-omega.vercel.app`) |
+| `SUPABASE_PHOTOS_BUCKET` | Optional | Defaults to `private-photos` |
+| `SUPABASE_AUDIO_BUCKET` | Optional | Defaults to `custom-audio` |
+| `SUPABASE_RENDERS_BUCKET` | Optional | Defaults to `rendered-videos` |
+
+---
+
+## 2. Setting Up Your Supabase Project (2 Minutes)
+
+1. Create a free project at [database.new](https://database.new).
+2. In your Supabase Dashboard, open the **SQL Editor** and run the migration script:
    - [`supabase/migrations/001_initial_schema.sql`](./supabase/migrations/001_initial_schema.sql)
-   This creates the `templates`, `music_tracks`, `projects`, `render_jobs`, and `system_settings` tables along with private storage buckets (`private-photos`, `custom-audio`, `rendered-videos`).
-3. Set the following environment variables in your production host:
-   ```env
-   NEXT_PUBLIC_APP_URL=https://your-wedding-domain.com
-   ADMIN_PASSCODE=your-strong-production-admin-passcode
-   DOWNLOAD_SIGNING_SECRET=your-64-char-random-hmac-secret
-   STORAGE_MODE=supabase
-   NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-   ```
+   - This creates the `projects` and `render_jobs` tables as well as the three storage buckets (`private-photos`, `custom-audio`, `rendered-videos`).
+   - *Note*: Even if you don't manually create the storage buckets, providing `SUPABASE_SERVICE_ROLE_KEY` allows `objectStorage.ts` to automatically create the buckets on first upload.
+3. Copy your `Project URL`, `anon` key, and `service_role` key from **Project Settings → API** into your Vercel Environment Variables and redeploy.
 
 ---
 
@@ -39,7 +41,7 @@ Because ShubhVivah Studio performs real server-side **1080×1920 H.264 + AAC MP4
 
 ```bash
 npm install
-npm run setup:assets
 npm run build
 npm run start
 ```
+*(Note: `npm run build` automatically runs `node scripts/generate-assets.mjs` before `next build` so all built-in royalty-free wedding `.wav` audio tracks and sample portraits are bundled automatically).*

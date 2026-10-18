@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbStore } from '@/lib/db/store';
 import { weddingProjectInputSchema } from '@/lib/validation/projectSchema';
-import { enqueueVideoRenderJob } from '@/lib/renderer/videoWorker';
+import {
+  enqueueVideoRenderJob,
+  executeRenderJob,
+} from '@/lib/renderer/videoWorker';
+import { isServerlessEnvironment } from '@/lib/storage/objectStorage';
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const project =
-    dbStore.getProjectById(params.id) || dbStore.getProjectBySlug(params.id);
+  let project =
+    (await dbStore.getProjectById(params.id)) ||
+    (await dbStore.getProjectBySlug(params.id));
 
   if (!project) {
     return NextResponse.json(
@@ -17,9 +22,15 @@ export async function GET(
     );
   }
 
-  const job = project.latestJobId
-    ? dbStore.getRenderJobById(project.latestJobId)
+  let job = project.latestJobId
+    ? await dbStore.getRenderJobById(project.latestJobId)
     : null;
+
+  if (isServerlessEnvironment() && job && job.status === 'queued') {
+    await executeRenderJob(job.id);
+    job = await dbStore.getRenderJobById(job.id);
+    project = (await dbStore.getProjectById(project.id)) || project;
+  }
 
   return NextResponse.json({
     project,
@@ -33,7 +44,8 @@ export async function PUT(
 ) {
   try {
     const existing =
-      dbStore.getProjectById(params.id) || dbStore.getProjectBySlug(params.id);
+      (await dbStore.getProjectById(params.id)) ||
+      (await dbStore.getProjectBySlug(params.id));
     if (!existing) {
       return NextResponse.json(
         { error: 'Wedding invitation project not found' },
@@ -45,14 +57,14 @@ export async function PUT(
 
     // Allow partial update (e.g. toggling public/private link) or full edit & regenerate
     if (typeof body.isPublic === 'boolean' && Object.keys(body).length === 1) {
-      const updated = dbStore.updateProject(existing.id, {
+      const updated = await dbStore.updateProject(existing.id, {
         isPublic: body.isPublic,
       });
       return NextResponse.json({
         success: true,
         project: updated,
         job: existing.latestJobId
-          ? dbStore.getRenderJobById(existing.latestJobId)
+          ? await dbStore.getRenderJobById(existing.latestJobId)
           : null,
       });
     }
@@ -73,19 +85,19 @@ export async function PUT(
       );
     }
 
-    const updated = dbStore.updateProject(existing.id, parsed.data);
+    const updated = await dbStore.updateProject(existing.id, parsed.data);
     let job = existing.latestJobId
-      ? dbStore.getRenderJobById(existing.latestJobId)
+      ? await dbStore.getRenderJobById(existing.latestJobId)
       : null;
 
     if (body.regenerate) {
-      job = dbStore.createRenderJob(existing.id);
-      enqueueVideoRenderJob(job.id);
+      job = await dbStore.createRenderJob(existing.id);
+      void enqueueVideoRenderJob(job.id);
     }
 
     return NextResponse.json({
       success: true,
-      project: dbStore.getProjectById(existing.id) || updated,
+      project: (await dbStore.getProjectById(existing.id)) || updated,
       job,
     });
   } catch (err: unknown) {
