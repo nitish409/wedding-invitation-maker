@@ -216,6 +216,19 @@ export const dbStore = {
     return db.projects[idx];
   },
 
+  async upsertProject(project: WeddingProject): Promise<WeddingProject> {
+    const db = await loadDb();
+    const idx = db.projects.findIndex((p) => p.id === project.id);
+    if (idx === -1) {
+      db.projects.unshift(project);
+    } else {
+      db.projects[idx] = { ...db.projects[idx], ...project };
+    }
+    await saveDb(db);
+    await syncProjectToSupabaseTable(project);
+    return project;
+  },
+
   async getProjectById(id: string): Promise<WeddingProject | null> {
     const db = await loadDb();
     return db.projects.find((p) => p.id === id) || null;
@@ -291,9 +304,11 @@ export const dbStore = {
     if (patch.status === 'completed' && updatedJob.downloadToken) {
       const pIdx = db.projects.findIndex((p) => p.id === updatedJob.projectId);
       if (pIdx !== -1) {
-        db.projects[pIdx].renderedVideoUrl = `/api/download/${updatedJob.id}?token=${encodeURIComponent(
-          updatedJob.downloadToken
-        )}`;
+        db.projects[pIdx].renderedVideoUrl = `/api/projects/${
+          updatedJob.projectId
+        }?stream=1&jobId=${encodeURIComponent(
+          updatedJob.id
+        )}&token=${encodeURIComponent(updatedJob.downloadToken)}`;
         db.projects[pIdx].updatedAt = now;
         await syncProjectToSupabaseTable(db.projects[pIdx]);
       }

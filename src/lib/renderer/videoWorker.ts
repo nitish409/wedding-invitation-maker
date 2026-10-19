@@ -361,20 +361,23 @@ export async function executeRenderJob(jobId: string): Promise<void> {
       '-c:v',
       'libx264',
       '-preset',
-      'ultrafast',
+      isServerlessEnvironment() ? 'veryfast' : 'ultrafast',
       '-crf',
-      isServerlessEnvironment() ? '25' : '22',
+      isServerlessEnvironment() ? '28' : '22',
+      ...(isServerlessEnvironment()
+        ? ['-maxrate', '420k', '-bufsize', '840k']
+        : []),
       '-pix_fmt',
       'yuv420p',
       '-r',
       String(outputFps),
-      // Audio encoding: AAC 192kbps Stereo
+      // Audio encoding: AAC Stereo
       '-af',
       audioFilter,
       '-c:a',
       'aac',
       '-b:a',
-      '192k',
+      isServerlessEnvironment() ? '96k' : '192k',
       '-ar',
       '44100',
       '-ac',

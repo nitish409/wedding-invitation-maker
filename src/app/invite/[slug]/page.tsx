@@ -66,8 +66,10 @@ export default function PublicInviteSharePage() {
   const copy = getLocalizedCopy(project.language);
   const enabledEvents = (project.events || []).filter((e) => e.enabled);
   const videoUrl =
-    job && job.status === 'completed' && job.downloadToken
-      ? `/api/download/${job.id}?token=${encodeURIComponent(job.downloadToken)}`
+    job && job.status === 'completed'
+      ? `/api/projects/${project.id}?stream=1&jobId=${encodeURIComponent(
+          job.id
+        )}&token=${encodeURIComponent(job.downloadToken || '')}`
       : project.renderedVideoUrl;
 
   return (

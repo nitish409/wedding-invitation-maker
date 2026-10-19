@@ -38,7 +38,9 @@ export default function ProjectStatusAndDownloadPage() {
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [localBlobUrl, setLocalBlobUrl] = useState<string | null>(null);
   const inFlightRef = useRef(false);
+  const recoveringVideoRef = useRef(false);
 
   const fetchStatus = useCallback(async () => {
     if (inFlightRef.current) return;
@@ -77,23 +79,83 @@ export default function ProjectStatusAndDownloadPage() {
     return () => clearInterval(timer);
   }, [job, fetchStatus]);
 
+  // Use same-route /api/projects/[id]?stream=1 so Vercel routes to the exact same warm Lambda container
   const videoStreamUrl =
-    job && job.status === 'completed' && job.downloadToken
-      ? `/api/download/${job.id}?token=${encodeURIComponent(job.downloadToken)}`
-      : project?.renderedVideoUrl || '';
+    localBlobUrl ||
+    (project && job && job.status === 'completed'
+      ? `/api/projects/${project.id}?stream=1&jobId=${encodeURIComponent(
+          job.id
+        )}&token=${encodeURIComponent(job.downloadToken || '')}`
+      : project?.renderedVideoUrl || '');
+
+  const handleVideoPlayerError = async () => {
+    if (!project || localBlobUrl || recoveringVideoRef.current) return;
+    recoveringVideoRef.current = true;
+    try {
+      const res = await fetch(`/api/projects/${project.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'download-mp4', project }),
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        if (blob.size > 1000) {
+          setLocalBlobUrl(URL.createObjectURL(blob));
+          setDownloadError(null);
+        }
+      }
+    } catch {
+      // ignore background recovery error
+    } finally {
+      recoveringVideoRef.current = false;
+    }
+  };
 
   const handleDownloadMp4 = async () => {
-    if (!videoStreamUrl || !project) return;
+    if (!project) return;
     setDownloadError(null);
     setDownloading(true);
-    setDownloadProgress(5);
+    setDownloadProgress(10);
 
     try {
-      const res = await fetch(`${videoStreamUrl}&download=1`);
+      const triggerBrowserDownload = (blobUrlToSave: string) => {
+        const a = document.createElement('a');
+        a.href = blobUrlToSave;
+        a.download = `${project.brideName.replace(
+          /\s+/g,
+          '_'
+        )}_Weds_${project.groomName.replace(/\s+/g, '_')}_Invitation.mp4`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      };
+
+      if (localBlobUrl) {
+        setDownloadProgress(100);
+        triggerBrowserDownload(localBlobUrl);
+        return;
+      }
+
+      const primaryUrl = `/api/projects/${project.id}?download=1&jobId=${encodeURIComponent(
+        job?.id || ''
+      )}&token=${encodeURIComponent(job?.downloadToken || '')}`;
+
+      let res = await fetch(primaryUrl);
+      // If a cold serverless container spun up without the MP4 in /tmp, POST the project to render & stream directly
+      if (!res.ok) {
+        setDownloadProgress(25);
+        res = await fetch(`/api/projects/${project.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'download-mp4', project }),
+        });
+      }
+
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(
-          errData.error || 'Failed to download MP4 video. Please try regenerating.'
+          errData.error ||
+            'Failed to download MP4 video. Please try regenerating.'
         );
       }
 
@@ -123,16 +185,8 @@ export default function ProjectStatusAndDownloadPage() {
       setDownloadProgress(100);
       const blob = new Blob(chunks as BlobPart[], { type: 'video/mp4' });
       const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = `${project.brideName.replace(/\s+/g, '_')}_Weds_${project.groomName.replace(
-        /\s+/g,
-        '_'
-      )}_Invitation.mp4`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(blobUrl);
+      setLocalBlobUrl(blobUrl);
+      triggerBrowserDownload(blobUrl);
     } catch (err: unknown) {
       setDownloadError(
         err instanceof Error ? err.message : 'Download interrupted'
@@ -335,6 +389,7 @@ export default function ProjectStatusAndDownloadPage() {
                     controls
                     autoPlay
                     playsInline
+                    onError={() => void handleVideoPlayerError()}
                     className="w-full h-full object-contain"
                   />
                 </div>
