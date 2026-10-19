@@ -222,6 +222,73 @@ function CreateInvitationWizardInner() {
     }));
   };
 
+  const optimizeAudioArrayBufferToWav = async (
+    arrayBuffer: ArrayBuffer,
+    startOffsetSec: number = 0,
+    maxDurationSec: number = 62
+  ): Promise<ArrayBuffer> => {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext })
+        .webkitAudioContext;
+    const ctx = new AudioCtx();
+    try {
+      const decoded = await ctx.decodeAudioData(arrayBuffer.slice(0));
+      const targetSampleRate = 13000;
+      const availDuration = Math.max(
+        1,
+        decoded.duration - Math.min(startOffsetSec, Math.max(0, decoded.duration - 5))
+      );
+      const clipDuration = Math.min(maxDurationSec, availDuration);
+      const startSample = Math.floor(
+        Math.min(startOffsetSec, Math.max(0, decoded.duration - clipDuration)) *
+          decoded.sampleRate
+      );
+      const numTargetSamples = Math.floor(clipDuration * targetSampleRate);
+      const wavByteLength = 44 + numTargetSamples * 2;
+      const outBuffer = new ArrayBuffer(wavByteLength);
+      const view = new DataView(outBuffer);
+
+      const writeAscii = (offset: number, str: string) => {
+        for (let i = 0; i < str.length; i++) {
+          view.setUint8(offset + i, str.charCodeAt(i));
+        }
+      };
+
+      writeAscii(0, 'RIFF');
+      view.setUint32(4, 36 + numTargetSamples * 2, true);
+      writeAscii(8, 'WAVE');
+      writeAscii(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
+      view.setUint32(24, targetSampleRate, true);
+      view.setUint32(28, targetSampleRate * 2, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+      writeAscii(36, 'data');
+      view.setUint32(40, numTargetSamples * 2, true);
+
+      const ch0 = decoded.getChannelData(0);
+      const ch1 = decoded.numberOfChannels > 1 ? decoded.getChannelData(1) : ch0;
+      const ratio = decoded.sampleRate / targetSampleRate;
+
+      for (let i = 0; i < numTargetSamples; i++) {
+        const srcIdx = Math.min(
+          ch0.length - 1,
+          startSample + Math.floor(i * ratio)
+        );
+        const mono = (ch0[srcIdx] + ch1[srcIdx]) * 0.5;
+        const clamped = Math.max(-0.98, Math.min(0.98, mono));
+        view.setInt16(44 + i * 2, Math.floor(clamped * 32767), true);
+      }
+
+      return outBuffer;
+    } finally {
+      void ctx.close().catch(() => {});
+    }
+  };
+
   // Custom Audio Upload Handler
   const handleCustomAudioUpload = async (
     e: React.ChangeEvent<HTMLInputElement>
@@ -232,17 +299,50 @@ function CreateInvitationWizardInner() {
     setUploadingAudio(true);
 
     try {
+      let fileToUpload = file;
+      let effectiveOffsetSec = project.music.startOffsetSec || 0;
+
+      if (file.size > 1.5 * 1024 * 1024 && typeof window !== 'undefined') {
+        try {
+          const rawBuf = await file.arrayBuffer();
+          const wavBuf = await optimizeAudioArrayBufferToWav(
+            rawBuf,
+            effectiveOffsetSec,
+            Math.max(60, totalDurationSec + 4)
+          );
+          const safeBase = file.name.replace(/\.[^.]+$/, '') || 'custom-song';
+          fileToUpload = new File([wavBuf], `${safeBase}.wav`, {
+            type: 'audio/wav',
+          });
+          effectiveOffsetSec = 0;
+        } catch {
+          // Fallback to original file
+        }
+      }
+
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', fileToUpload);
       formData.append('type', 'audio');
 
       const res = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
       });
-      const data = await res.json();
+      const rawText = await res.text();
+      let data: Record<string, unknown> = {};
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        if (res.status === 413 || rawText.includes('Request Entity Too Large')) {
+          throw new Error(
+            'Selected audio file exceeds serverless size limit. Please choose a shorter clip.'
+          );
+        }
+        throw new Error(rawText.slice(0, 120) || 'Audio upload failed');
+      }
+
       if (!res.ok) {
-        throw new Error(data.error || 'Audio upload failed');
+        throw new Error(String(data.error || 'Audio upload failed'));
       }
 
       setProject((prev) => ({
@@ -250,9 +350,9 @@ function CreateInvitationWizardInner() {
         music: {
           ...prev.music,
           trackId: 'custom',
-          title: `${data.title} (Custom Upload)`,
-          url: data.url,
-          startOffsetSec: 0,
+          title: `${String(data.title || file.name.replace(/\.[^.]+$/, ''))} (Custom Upload)`,
+          url: String(data.url || ''),
+          startOffsetSec: effectiveOffsetSec,
         },
       }));
     } catch (err: unknown) {
@@ -307,18 +407,65 @@ function CreateInvitationWizardInner() {
         : '/api/projects';
       const method = editProjectId ? 'PUT' : 'POST';
 
+      let submissionProject = project;
+      if (
+        submissionProject.music.url.startsWith('data:audio/') &&
+        submissionProject.music.url.length > 2_400_000 &&
+        typeof window !== 'undefined'
+      ) {
+        try {
+          const resp = await fetch(submissionProject.music.url);
+          const rawBuf = await resp.arrayBuffer();
+          const wavBuf = await optimizeAudioArrayBufferToWav(
+            rawBuf,
+            submissionProject.music.startOffsetSec || 0,
+            Math.max(58, totalDurationSec + 2)
+          );
+          const bytes = new Uint8Array(wavBuf);
+          let binary = '';
+          for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+          }
+          const b64 = window.btoa(binary);
+          submissionProject = {
+            ...submissionProject,
+            music: {
+              ...submissionProject.music,
+              url: `data:audio/wav;base64,${b64}`,
+              startOffsetSec: 0,
+            },
+          };
+        } catch {
+          // keep existing
+        }
+      }
+
       const res = await fetch(endpoint, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...project,
+          ...submissionProject,
           startRender: true,
           regenerate: true,
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) {
+      const rawText = await res.text();
+      let data: { error?: string; project?: { id: string } } = {};
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        if (res.status === 413 || rawText.includes('Request Entity Too Large')) {
+          throw new Error(
+            'Your uploaded media files exceed the serverless request size limit (4.5MB). Please re-upload your song or choose a built-in track.'
+          );
+        }
+        throw new Error(
+          rawText.slice(0, 140) || 'Failed to start video generation'
+        );
+      }
+
+      if (!res.ok || !data.project?.id) {
         throw new Error(data.error || 'Failed to start video generation');
       }
 

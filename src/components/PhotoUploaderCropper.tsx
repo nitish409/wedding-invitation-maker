@@ -30,6 +30,57 @@ export const PhotoUploaderCropper: React.FC<PhotoUploaderCropperProps> = ({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const compressPhotoForUpload = (file: File): Promise<File> => {
+    if (typeof window === 'undefined' || file.size <= 350 * 1024) {
+      return Promise.resolve(file);
+    }
+    return new Promise((resolve) => {
+      const img = new Image();
+      const objUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objUrl);
+        const maxDim = 1080;
+        let w = img.naturalWidth || img.width;
+        let h = img.naturalHeight || img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve(file);
+              return;
+            }
+            const safeName = file.name.replace(/\.[^.]+$/, '') + '.jpg';
+            resolve(new File([blob], safeName, { type: 'image/jpeg' }));
+          },
+          'image/jpeg',
+          0.84
+        );
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objUrl);
+        resolve(file);
+      };
+      img.src = objUrl;
+    });
+  };
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -38,23 +89,33 @@ export const PhotoUploaderCropper: React.FC<PhotoUploaderCropperProps> = ({
     setUploading(true);
 
     try {
+      const processedFile = await compressPhotoForUpload(file);
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', processedFile);
       formData.append('type', 'photo');
 
       const res = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
       });
-      const data = await res.json();
+      const rawText = await res.text();
+      let data: Record<string, unknown> = {};
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        if (res.status === 413 || rawText.includes('Request Entity Too Large')) {
+          throw new Error('Photo file is too large for upload. Please choose a smaller image.');
+        }
+        throw new Error(rawText.slice(0, 120) || 'Failed to upload photo');
+      }
 
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to upload photo');
+        throw new Error(String(data.error || 'Failed to upload photo'));
       }
 
       onChange({
         ...slot,
-        url: data.url,
+        url: String(data.url || ''),
         zoom: 1,
         offsetX: 0,
         offsetY: 0,

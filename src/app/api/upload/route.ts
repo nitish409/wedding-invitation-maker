@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
             process.env.AWS_LAMBDA_FUNCTION_NAME ||
             process.cwd().startsWith('/var/task')
         ) &&
-        buffer.length <= 4 * 1024 * 1024;
+        buffer.length <= 600 * 1024;
       const url = useInlineDataUrl
         ? `data:${file.type};base64,${buffer.toString('base64')}`
         : mediaUrl;
@@ -205,7 +205,7 @@ export async function POST(req: NextRequest) {
             process.env.AWS_LAMBDA_FUNCTION_NAME ||
             process.cwd().startsWith('/var/task')
         ) &&
-        buffer.length <= 4 * 1024 * 1024;
+        buffer.length <= 2 * 1024 * 1024;
       const url = useInlineDataUrl
         ? `data:${effectiveMime};base64,${buffer.toString('base64')}`
         : mediaUrl;
