@@ -66,11 +66,9 @@ async function ensureCanvasFontsRegistered(): Promise<void> {
           },
         });
         const css = await cssRes.text();
-        const urls = [...css.matchAll(/url\((https:\/\/[^)]+\.ttf)\)/g)].map(
-          (m) => m[1]
-        );
-        if (urls.length > 0) {
-          const fontRes = await fetch(urls[urls.length - 1]);
+        const match = css.match(/url\((https:\/\/[^)]+\.ttf)\)/);
+        if (match && match[1]) {
+          const fontRes = await fetch(match[1]);
           const buf = Buffer.from(await fontRes.arrayBuffer());
           GlobalFonts.register(buf, spec.family);
         }
