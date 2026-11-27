@@ -5,21 +5,25 @@ const nextConfig = {
     outputFileTracingIncludes: {
       '/api/projects': [
         './node_modules/ffmpeg-static/**/*',
+        './public/fonts/**/*',
         './public/samples/**/*',
         './public/audio/**/*',
       ],
       '/api/projects/[id]': [
         './node_modules/ffmpeg-static/**/*',
+        './public/fonts/**/*',
         './public/samples/**/*',
         './public/audio/**/*',
       ],
       '/api/jobs/[id]': [
         './node_modules/ffmpeg-static/**/*',
+        './public/fonts/**/*',
         './public/samples/**/*',
         './public/audio/**/*',
       ],
       '/api/download/[id]': [
         './node_modules/ffmpeg-static/**/*',
+        './public/fonts/**/*',
         './public/samples/**/*',
         './public/audio/**/*',
       ],

@@ -1,6 +1,12 @@
 import fs from 'fs';
 import path from 'path';
-import { createCanvas, Image, loadImage, SKRSContext2D } from '@napi-rs/canvas';
+import {
+  createCanvas,
+  GlobalFonts,
+  Image,
+  loadImage,
+  SKRSContext2D,
+} from '@napi-rs/canvas';
 import {
   ComputedScene,
   PhotoSlotConfig,
@@ -13,6 +19,69 @@ import {
   LocalizedLabels,
 } from '@/lib/video/sceneCalculator';
 import { objectStorage } from '@/lib/storage/objectStorage';
+
+let fontsRegistered = false;
+
+async function ensureCanvasFontsRegistered(): Promise<void> {
+  if (fontsRegistered) return;
+
+  const fontFiles: Array<{ file: string; family: string; cssUrl: string }> = [
+    {
+      file: 'ShubhSans.ttf',
+      family: 'ShubhSans',
+      cssUrl: 'https://fonts.googleapis.com/css2?family=Hind:wght@600;700',
+    },
+    {
+      file: 'ShubhRoyal.ttf',
+      family: 'ShubhRoyal',
+      cssUrl:
+        'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700',
+    },
+  ];
+
+  for (const spec of fontFiles) {
+    const candidates = [
+      path.join(process.cwd(), 'public', 'fonts', spec.file),
+      path.join('/var/task', 'public', 'fonts', spec.file),
+    ];
+    let loaded = false;
+    for (const candidate of candidates) {
+      if (fs.existsSync(candidate)) {
+        try {
+          const buf = fs.readFileSync(candidate);
+          GlobalFonts.register(buf, spec.family);
+          loaded = true;
+          break;
+        } catch {
+          // continue
+        }
+      }
+    }
+
+    if (!loaded) {
+      try {
+        const cssRes = await fetch(spec.cssUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Linux; U; Android 2.2; en-us)',
+          },
+        });
+        const css = await cssRes.text();
+        const urls = [...css.matchAll(/url\((https:\/\/[^)]+\.ttf)\)/g)].map(
+          (m) => m[1]
+        );
+        if (urls.length > 0) {
+          const fontRes = await fetch(urls[urls.length - 1]);
+          const buf = Buffer.from(await fontRes.arrayBuffer());
+          GlobalFonts.register(buf, spec.family);
+        }
+      } catch {
+        // ignore network fallback error
+      }
+    }
+  }
+
+  fontsRegistered = true;
+}
 
 export interface LoadedProjectImages {
   bride?: Image;
@@ -94,6 +163,7 @@ async function resolveAndLoadImage(url?: string): Promise<Image | undefined> {
 export async function preloadProjectImages(
   project: WeddingProject
 ): Promise<LoadedProjectImages> {
+  await ensureCanvasFontsRegistered();
   const [bride, groom, couple, gallery] = await Promise.all([
     resolveAndLoadImage(project.photos?.bride?.url),
     resolveAndLoadImage(project.photos?.groom?.url),
@@ -448,7 +518,8 @@ export function renderSingleVideoFrame(
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  const fontStack = '"Segoe UI", "Nirmala UI", "Georgia", serif';
+  const fontStack =
+    '"ShubhSans", "ShubhRoyal", "Segoe UI", "Nirmala UI", "Georgia", sans-serif';
   const cx = width / 2;
 
   // SCENE 1: GANESH INVOCATION
