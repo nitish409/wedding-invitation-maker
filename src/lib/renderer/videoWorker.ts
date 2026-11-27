@@ -363,9 +363,9 @@ export async function executeRenderJob(jobId: string): Promise<void> {
       '-preset',
       isServerlessEnvironment() ? 'veryfast' : 'ultrafast',
       '-crf',
-      isServerlessEnvironment() ? '28' : '22',
+      isServerlessEnvironment() ? '29' : '22',
       ...(isServerlessEnvironment()
-        ? ['-maxrate', '420k', '-bufsize', '840k']
+        ? ['-maxrate', '250k', '-bufsize', '500k']
         : []),
       '-pix_fmt',
       'yuv420p',
@@ -377,7 +377,7 @@ export async function executeRenderJob(jobId: string): Promise<void> {
       '-c:a',
       'aac',
       '-b:a',
-      isServerlessEnvironment() ? '96k' : '192k',
+      isServerlessEnvironment() ? '64k' : '192k',
       '-ar',
       '44100',
       '-ac',

@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
+import path from 'path';
 import { dbStore } from '@/lib/db/store';
 import {
   enqueueVideoRenderJob,
   executeRenderJob,
 } from '@/lib/renderer/videoWorker';
-import { isServerlessEnvironment } from '@/lib/storage/objectStorage';
+import {
+  isServerlessEnvironment,
+  objectStorage,
+} from '@/lib/storage/objectStorage';
 
 export const maxDuration = 60;
 
@@ -71,10 +75,23 @@ export async function POST(
   }
 
   const project = await dbStore.getProjectById(job.projectId);
+  let inlineMp4Base64: string | undefined;
+  if (
+    isServerlessEnvironment() &&
+    updated?.status === 'completed' &&
+    updated?.outputPath
+  ) {
+    const storageKey = path.basename(updated.outputPath);
+    const buf = await objectStorage.downloadObject('renders', storageKey);
+    if (buf && buf.length <= 3.1 * 1024 * 1024) {
+      inlineMp4Base64 = buf.toString('base64');
+    }
+  }
 
   return NextResponse.json({
     success: true,
     job: updated,
     project,
+    inlineMp4Base64,
   });
 }

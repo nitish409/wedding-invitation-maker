@@ -23,6 +23,16 @@ import {
   Film,
 } from 'lucide-react';
 
+function base64ToMp4BlobUrl(b64: string): string {
+  const byteChars = window.atob(b64);
+  const bytes = new Uint8Array(byteChars.length);
+  for (let i = 0; i < byteChars.length; i++) {
+    bytes[i] = byteChars.charCodeAt(i);
+  }
+  const blob = new Blob([bytes], { type: 'video/mp4' });
+  return URL.createObjectURL(blob);
+}
+
 export default function ProjectStatusAndDownloadPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -39,20 +49,94 @@ export default function ProjectStatusAndDownloadPage() {
   const [copiedLink, setCopiedLink] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [localBlobUrl, setLocalBlobUrl] = useState<string | null>(null);
+  const localBlobUrlRef = useRef<string | null>(null);
   const inFlightRef = useRef(false);
   const recoveringVideoRef = useRef(false);
+
+  const updateLocalBlobUrl = (url: string) => {
+    localBlobUrlRef.current = url;
+    setLocalBlobUrl(url);
+  };
 
   const fetchStatus = useCallback(async () => {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
     try {
-      const res = await fetch(`/api/projects/${projectId}`, {
+      let res = await fetch(`/api/projects/${projectId}`, {
         cache: 'no-store',
       });
+
+      // If a cold stateless serverless container answered with 404, restore from localStorage cache
+      if (res.status === 404 && typeof window !== 'undefined') {
+        const cachedRaw = window.localStorage.getItem(
+          `shubhvivah_project_${projectId}`
+        );
+        if (cachedRaw) {
+          const cachedProject = JSON.parse(cachedRaw);
+          res = await fetch(`/api/projects/${projectId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'restore-and-status',
+              project: cachedProject,
+            }),
+          });
+        }
+      }
+
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || 'Project not found');
       }
+
+      if (typeof window !== 'undefined' && data.project) {
+        try {
+          window.localStorage.setItem(
+            `shubhvivah_project_${data.project.id}`,
+            JSON.stringify(data.project)
+          );
+        } catch {
+          // ignore storage quota errors
+        }
+      }
+
+      if (
+        typeof window !== 'undefined' &&
+        data.inlineMp4Base64 &&
+        !localBlobUrlRef.current
+      ) {
+        try {
+          updateLocalBlobUrl(base64ToMp4BlobUrl(data.inlineMp4Base64));
+        } catch {
+          // ignore decode error
+        }
+      } else if (
+        typeof window !== 'undefined' &&
+        data.job?.status === 'completed' &&
+        data.project &&
+        !localBlobUrlRef.current
+      ) {
+        // Ensure the MP4 blob is loaded into browser memory before showing the video player
+        try {
+          const mp4Res = await fetch(`/api/projects/${projectId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'download-mp4',
+              project: data.project,
+            }),
+          });
+          if (mp4Res.ok) {
+            const blob = await mp4Res.blob();
+            if (blob.size > 1000) {
+              updateLocalBlobUrl(URL.createObjectURL(blob));
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
       setProject(data.project);
       setJob(data.job);
       setLoading(false);
@@ -79,7 +163,7 @@ export default function ProjectStatusAndDownloadPage() {
     return () => clearInterval(timer);
   }, [job, fetchStatus]);
 
-  // Use same-route /api/projects/[id]?stream=1 so Vercel routes to the exact same warm Lambda container
+  // Always prefer the in-memory Blob URL so playback is instant and immune to serverless container hops
   const videoStreamUrl =
     localBlobUrl ||
     (project && job && job.status === 'completed'
@@ -89,7 +173,8 @@ export default function ProjectStatusAndDownloadPage() {
       : project?.renderedVideoUrl || '');
 
   const handleVideoPlayerError = async () => {
-    if (!project || localBlobUrl || recoveringVideoRef.current) return;
+    if (!project || localBlobUrlRef.current || recoveringVideoRef.current)
+      return;
     recoveringVideoRef.current = true;
     try {
       const res = await fetch(`/api/projects/${project.id}`, {
@@ -100,7 +185,7 @@ export default function ProjectStatusAndDownloadPage() {
       if (res.ok) {
         const blob = await res.blob();
         if (blob.size > 1000) {
-          setLocalBlobUrl(URL.createObjectURL(blob));
+          updateLocalBlobUrl(URL.createObjectURL(blob));
           setDownloadError(null);
         }
       }
@@ -130,9 +215,9 @@ export default function ProjectStatusAndDownloadPage() {
         a.remove();
       };
 
-      if (localBlobUrl) {
+      if (localBlobUrlRef.current) {
         setDownloadProgress(100);
-        triggerBrowserDownload(localBlobUrl);
+        triggerBrowserDownload(localBlobUrlRef.current);
         return;
       }
 
@@ -141,7 +226,6 @@ export default function ProjectStatusAndDownloadPage() {
       )}&token=${encodeURIComponent(job?.downloadToken || '')}`;
 
       let res = await fetch(primaryUrl);
-      // If a cold serverless container spun up without the MP4 in /tmp, POST the project to render & stream directly
       if (!res.ok) {
         setDownloadProgress(25);
         res = await fetch(`/api/projects/${project.id}`, {
@@ -185,7 +269,7 @@ export default function ProjectStatusAndDownloadPage() {
       setDownloadProgress(100);
       const blob = new Blob(chunks as BlobPart[], { type: 'video/mp4' });
       const blobUrl = URL.createObjectURL(blob);
-      setLocalBlobUrl(blobUrl);
+      updateLocalBlobUrl(blobUrl);
       triggerBrowserDownload(blobUrl);
     } catch (err: unknown) {
       setDownloadError(
@@ -228,8 +312,10 @@ export default function ProjectStatusAndDownloadPage() {
   };
 
   const handleRetryRender = async () => {
-    if (!job) return;
+    if (!job || !project) return;
     setRetrying(true);
+    localBlobUrlRef.current = null;
+    setLocalBlobUrl(null);
     setJob({
       ...job,
       status: 'processing',
@@ -238,8 +324,22 @@ export default function ProjectStatusAndDownloadPage() {
       stageMessage: 'Re-rendering your HD Wedding Video...',
     });
     try {
-      const res = await fetch(`/api/jobs/${job.id}`, { method: 'POST' });
+      const res = await fetch(`/api/projects/${project.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'restore-and-status',
+          project,
+        }),
+      });
       const data = await res.json();
+      if (typeof window !== 'undefined' && data.inlineMp4Base64) {
+        try {
+          updateLocalBlobUrl(base64ToMp4BlobUrl(data.inlineMp4Base64));
+        } catch {
+          // ignore
+        }
+      }
       if (data.job) {
         setJob(data.job);
       }

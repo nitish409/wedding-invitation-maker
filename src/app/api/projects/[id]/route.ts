@@ -147,9 +147,23 @@ export async function GET(
     );
   }
 
+  let inlineMp4Base64: string | undefined;
+  if (
+    isServerlessEnvironment() &&
+    job?.status === 'completed' &&
+    job?.outputPath
+  ) {
+    const storageKey = path.basename(job.outputPath);
+    const buf = await objectStorage.downloadObject('renders', storageKey);
+    if (buf && buf.length <= 3.1 * 1024 * 1024) {
+      inlineMp4Base64 = buf.toString('base64');
+    }
+  }
+
   return NextResponse.json({
     project,
     job,
+    inlineMp4Base64,
   });
 }
 
@@ -214,6 +228,17 @@ export async function POST(
         },
         { status: 500 }
       );
+    }
+
+    if (body.action === 'restore-and-status') {
+      return NextResponse.json({
+        project,
+        job,
+        inlineMp4Base64:
+          fileBuffer.length <= 3.1 * 1024 * 1024
+            ? fileBuffer.toString('base64')
+            : undefined,
+      });
     }
 
     return buildMp4Response(req, fileBuffer, project, job.id, true);

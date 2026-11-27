@@ -21,12 +21,26 @@ export default function PublicInviteSharePage() {
 
   const [project, setProject] = useState<WeddingProject | null>(null);
   const [job, setJob] = useState<RenderJob | null>(null);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch(`/api/projects/${slug}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((data) => {
+        if (typeof window !== 'undefined' && data.inlineMp4Base64) {
+          try {
+            const byteChars = window.atob(data.inlineMp4Base64);
+            const bytes = new Uint8Array(byteChars.length);
+            for (let i = 0; i < byteChars.length; i++) {
+              bytes[i] = byteChars.charCodeAt(i);
+            }
+            const blob = new Blob([bytes], { type: 'video/mp4' });
+            setBlobUrl(URL.createObjectURL(blob));
+          } catch {
+            // ignore
+          }
+        }
         if (data.project) setProject(data.project);
         if (data.job) setJob(data.job);
         setLoading(false);
@@ -66,11 +80,12 @@ export default function PublicInviteSharePage() {
   const copy = getLocalizedCopy(project.language);
   const enabledEvents = (project.events || []).filter((e) => e.enabled);
   const videoUrl =
-    job && job.status === 'completed'
+    blobUrl ||
+    (job && job.status === 'completed'
       ? `/api/projects/${project.id}?stream=1&jobId=${encodeURIComponent(
           job.id
         )}&token=${encodeURIComponent(job.downloadToken || '')}`
-      : project.renderedVideoUrl;
+      : project.renderedVideoUrl);
 
   return (
     <div className="min-h-screen bg-royal-gradient text-[#FFFDF9] py-12 px-4 sm:px-6">
